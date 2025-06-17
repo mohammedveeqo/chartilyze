@@ -3,9 +3,11 @@ import { DashboardHeader } from '@/components/dashboard/dashboard-header'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { RecentTrades } from '@/components/dashboard/recent-trades'
 import { PerformanceChart } from '@/components/dashboard/performance-chart'
-import { TradingCalendar } from '@/components//dashboard/trading-calendar'
+import { TradingCalendar } from '@/components/dashboard/trading-calendar'
 import { PsychologyInsights } from '@/components/dashboard/psychology-insights'
 import { QuickActions } from '@/components/dashboard/quick-actions'
+
+import '@/app/globals copy.css'; // Ensure global styles are imported
 
 export const metadata: Metadata = {
   title: 'Dashboard | Chartilyze',

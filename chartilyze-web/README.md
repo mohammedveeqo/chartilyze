@@ -34,3 +34,24 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+Code dump:
+find . -type f -name "*.tsx" \
+  -not -path "*/node_modules/*" \
+  -not -path "*/.git/*" \
+  -not -path "*/.next/*" \
+  -not -path "*/dist/*" \
+  -not -path "*/build/*" \
+  -not -path "*/out/*" \
+  -not -path "*/coverage/*" \
+  -exec sh -c 'for file; do
+    depth=$(echo "$file" | awk -F"/" "{ print NF }")
+    if [ "$depth" -le 5 ]; then
+      echo -e "\n\n===== $file ====="
+      cat "$file"
+    fi
+  done' sh {} + > full-tsx-code-dump.txt
+
+
+Tree:
+tree -I 'node_modules|.git|.next|dist|build|out|coverage' -L 3 -a -f

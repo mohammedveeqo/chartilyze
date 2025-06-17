@@ -1,0 +1,39 @@
+.
+├── ./.env.local
+├── ./.gitignore
+├── ./README.md
+├── ./eslint.config.mjs
+├── ./next-env.d.ts
+├── ./next.config.ts
+├── ./package-lock.json
+├── ./package.json
+├── ./postcss.config.js
+├── ./postcss.config.mjs
+├── ./public
+│   ├── ./public/file.svg
+│   ├── ./public/globe.svg
+│   ├── ./public/next.svg
+│   ├── ./public/vercel.svg
+│   └── ./public/window.svg
+├── ./src
+│   ├── ./src/app
+│   │   ├── ./src/app/dashboard
+│   │   ├── ./src/app/favicon.ico
+│   │   ├── ./src/app/globals.css
+│   │   ├── ./src/app/layout.tsx
+│   │   ├── ./src/app/page.tsx
+│   │   ├── ./src/app/sign-in
+│   │   └── ./src/app/sign-up
+│   ├── ./src/components
+│   │   ├── ./src/components/dashboard
+│   │   └── ./src/components/ui
+│   ├── ./src/lib
+│   │   └── ./src/lib/utils.ts
+│   └── ./src/middleware.ts
+├── ./structure.txt
+├── ./styles
+│   └── ./styles/globals.input.css
+├── ./tailwind.config.ts
+└── ./tsconfig.json
+
+12 directories, 25 files
