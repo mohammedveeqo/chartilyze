@@ -1869,7 +1869,7 @@ export function PsychologyInsights() {
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import DashboardClient from "@/app/dashboard/client"; 
-import '@/app/globals.css' 
+import '@/app/globals copy.css'; // Ensure global styles are imported
 
 export default async function DashboardPage() {
   const { userId } = await auth(); // ✅ add `await`
@@ -1890,7 +1890,7 @@ import { TradingCalendar } from '@/components/dashboard/trading-calendar'
 import { PsychologyInsights } from '@/components/dashboard/psychology-insights'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 
-
+import '@/app/globals copy.css'; // Ensure global styles are imported
 
 export const metadata: Metadata = {
   title: 'Dashboard | Chartilyze',
@@ -1966,7 +1966,7 @@ export default function TestPage() {
 ===== ./src/app/layout.tsx =====
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import './globals.css'
+import './globals copy.css'
 import { ClerkProvider } from '@clerk/nextjs'
 
 const inter = Inter({ subsets: ['latin'] })

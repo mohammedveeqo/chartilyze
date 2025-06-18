@@ -1,8 +1,10 @@
+// src/components/dashboard/dashboard-header.tsx
 'use client'
 
-import { Bell, Search, Settings, User } from 'lucide-react'
+import { Bell, Search, Settings, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { UserButton } from "@clerk/nextjs";
 
 export function DashboardHeader() {
   const currentDate = new Date().toLocaleDateString('en-US', {
@@ -46,13 +48,7 @@ export function DashboardHeader() {
           <Settings className="h-5 w-5" />
         </Button>
         
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-gray-400 hover:text-white hover:bg-gray-800"
-        >
-          <User className="h-5 w-5" />
-        </Button>
+        <UserButton afterSignOutUrl="/sign-in" />
       </div>
     </div>
   )
