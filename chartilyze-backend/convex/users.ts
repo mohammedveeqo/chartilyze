@@ -1,5 +1,5 @@
 // chartilyze-backend/convex/users.ts
-import { mutation } from "./_generated/server";
+import { mutation,query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const storeUser = mutation({
@@ -27,3 +27,24 @@ export const storeUser = mutation({
     });
   },
 });
+
+
+// Query for getting user info
+export const getUser = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    console.log("Get User - Auth Check:", {
+      hasIdentity: !!identity,
+      identity,
+      requestedClerkId: args.clerkId
+    });
+
+    return await ctx.db
+      .query("users")
+      .filter(q => q.eq(q.field("clerkId"), args.clerkId))
+      .first();
+  },
+});
+
+    

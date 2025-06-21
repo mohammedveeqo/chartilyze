@@ -1,12 +1,15 @@
+// app/dashboard/page.tsx
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import DashboardClient from "@/app/dashboard/client"; 
-import '@/app/globals copy.css'; // Ensure global styles are imported
+import DashboardClient from "./client";
+import '@/app/globals copy.css';
 
 export default async function DashboardPage() {
-  const { userId } = await auth(); // ✅ add `await`
+  const { userId } = await auth();
 
-  if (!userId) redirect("/sign-in");
+  if (!userId) {
+    redirect("/sign-in");
+  }
 
   return <DashboardClient />;
 }

@@ -1,9 +1,9 @@
 // convex/types.ts
 import { Id } from "./_generated/dataModel";
 
-export type Journal = {
+
+export interface Journal {
   _id: Id<"journals">;
-  _creationTime: number;
   userId: string;
   name: string;
   description?: string;
@@ -17,7 +17,14 @@ export type Journal = {
   };
   createdAt: number;
   updatedAt: number;
-};
+}
+
+export interface JournalsQueryResult {
+  hasJournals: boolean;
+  journals: Journal[];
+  total: number;
+}
+
 
 export type Trade = {
   _id: Id<"trades">;

@@ -1,4 +1,5 @@
-import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
+// convex/journals.ts
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { ConvexError } from "convex/values";
@@ -6,7 +7,26 @@ import { ConvexError } from "convex/values";
 // Types
 type Journal = Doc<"journals">;
 
-// Queries
+// Individual exports instead of default export
+export const getUserJournals = query({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { hasJournals: false, journals: [] };
+    }
+
+    const journals = await ctx.db
+      .query("journals")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+
+    return {
+      hasJournals: journals.length > 0,
+      journals
+    };
+  },
+});
+
 export const list = query({
   args: {
     limit: v.optional(v.number())
@@ -24,7 +44,6 @@ export const list = query({
       .order("desc")
       .take(limit);
 
-    // Get total count for pagination info
     const total = await ctx.db
       .query("journals")
       .filter(q => q.eq(q.field("userId"), userId))
@@ -38,9 +57,6 @@ export const list = query({
     };
   }
 });
-
-
-
 
 export const getById = query({
   args: { id: v.id("journals") },
@@ -105,7 +121,6 @@ export const deleteJournal = mutation({
         throw new ConvexError("Journal not found or access denied");
       }
 
-      // Delete all associated trades first
       const trades = await ctx.db
         .query("trades")
         .filter(q => q.eq(q.field("journalId"), args.id))
@@ -126,39 +141,63 @@ export const deleteJournal = mutation({
   }
 });
 
+//
+
+// convex/journals.ts
 export const create = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
-    strategy: v.optional(v.object({
-      name: v.string(),
-      rules: v.array(v.string())
-    })),
-    settings: v.optional(v.object({
-      defaultRiskPercentage: v.number(),
-      defaultPositionSize: v.number(),
-    }))
+    strategy: v.optional(
+      v.object({
+        name: v.string(),
+        rules: v.array(v.string())
+      })
+    ),
+    settings: v.optional(
+      v.object({
+        defaultRiskPercentage: v.number(),
+        defaultPositionSize: v.number()
+      })
+    )
   },
   handler: async (ctx, args) => {
-    try {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) throw new ConvexError("Not authenticated");
+    // Add detailed logging
+    console.log("Starting journal creation...");
+    
+    const identity = await ctx.auth.getUserIdentity();
+    console.log("Auth identity in create:", identity); // Log the identity
 
-      const timestamp = Date.now();
-      return await ctx.db.insert("journals", {
+    if (!identity) {
+      console.log("No identity found in create mutation");
+      throw new ConvexError("You must be logged in to create a journal");
+    }
+
+    try {
+      const journal = await ctx.db.insert("journals", {
         userId: identity.subject,
         name: args.name,
         description: args.description,
         strategy: args.strategy,
-        settings: args.settings,
-        createdAt: timestamp,
-        updatedAt: timestamp
+        settings: args.settings ?? {
+          defaultRiskPercentage: 1,
+          defaultPositionSize: 100
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now()
       });
+
+      console.log("Journal created successfully:", journal);
+      return journal;
     } catch (error) {
-      if (error instanceof ConvexError) {
-        throw error;
-      }
+      console.error("Error creating journal:", error);
       throw new ConvexError("Failed to create journal");
     }
   }
 });
+
+
+
+
+
+

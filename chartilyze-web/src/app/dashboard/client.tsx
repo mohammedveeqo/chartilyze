@@ -2,10 +2,9 @@
 
 import { useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../chartilyze-backend/convex/_generated/api";
-
-
+import { toast } from "sonner";
 
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { StatsCards } from "@/components/dashboard/stats-cards";
@@ -14,39 +13,49 @@ import { PerformanceChart } from "@/components/dashboard/performance-chart";
 import { TradingCalendar } from "@/components/dashboard/trading-calendar";
 import { PsychologyInsights } from "@/components/dashboard/psychology-insights";
 import { QuickActions } from "@/components/dashboard/quick-actions";
-import TestComponent from "./test";
-import { useQuery } from "convex/react";
-
-
-import "@/app/globals copy.css";
+import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+import { DebugAuth } from "@/components/debug-auth";
 
 export default function DashboardClient() {
-  const { user, isSignedIn } = useUser();
+  const { user } = useUser();
   const storeUser = useMutation(api.users.storeUser);
-  const identity = useQuery(api.debug.whoAmI); // ✅ Safe hook usage
+  const journalsData = useQuery(api.journals.getUserJournals);
 
+  // Store user in Convex when component mounts
   useEffect(() => {
-    if (isSignedIn && user?.id && user?.emailAddresses[0]?.emailAddress) {
-      storeUser({
-        clerkId: user.id,
-        email: user.emailAddresses[0].emailAddress,
-        name: user.fullName ?? "Unknown",
-      }).catch((err) => {
-        console.error("Failed to store user in Convex:", err);
-      });
-    }
-  }, [isSignedIn, user, storeUser]);
+    const initializeUser = async () => {
+      if (!user?.id) return;
 
-  useEffect(() => {
-    console.log("Convex sees identity:", identity);
-  }, [identity]);
+      try {
+        await storeUser({
+          clerkId: user.id,
+          email: user.emailAddresses[0]?.emailAddress ?? "",
+          name: user.fullName ?? "Unknown",
+        });
+      } catch (error) {
+        console.error("Failed to store user in Convex:", error);
+        toast.error("Failed to initialize user data");
+      }
+    };
+
+    initializeUser();
+  }, [user, storeUser]);
+
+  // Show loading state while fetching journals
+  if (journalsData === undefined) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-white">Loading journals...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <div>
-        <h1>Dashboard</h1>
-        <TestComponent />
-      </div>
+      {!journalsData.hasJournals && <OnboardingWizard />}
+
+      {journalsData.hasJournals && (
+            <div className="min-h-screen bg-gray-950">
       <div className="container mx-auto px-4 py-6 space-y-6">
         <DashboardHeader />
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -62,6 +71,9 @@ export default function DashboardClient() {
           <div className="xl:col-span-1"><TradingCalendar /></div>
         </div>
       </div>
+    </div>
+      )}
+
     </div>
   );
 }

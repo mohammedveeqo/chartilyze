@@ -1,9 +1,10 @@
 // convex/auth.config.ts
-export default {
+
+export default ({
   providers: [
     {
-      domain: "https://exciting-hedgehog-57.clerk.accounts.dev",
-      applicationID: "convex", // This must match JWT template name
+      domain: "https://moved-glowworm-14.clerk.accounts.dev", // Changed to match the 'iss' claim
+      applicationID: "exciting-hedgehog-57",  // Matches the 'aud' claim
     },
   ],
-};
+});

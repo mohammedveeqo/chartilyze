@@ -1,3 +1,4 @@
 // convex/index.ts
-export { storeUser } from "./users";
-export { whoAmI } from "./debug";
+export * from "./journals";  // Changed to export all
+export * from "./debug";
+export * from "./users";
