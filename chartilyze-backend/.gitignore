@@ -1,6 +1,6 @@
-node_modules
+echo "node_modules
 .env
 .DS_Store
 convex/_generated
 .next
-dist
+dist" > .gitignore
