@@ -1,7 +1,6 @@
-// next.config.js
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    eslint: {
+  eslint: {
     ignoreDuringBuilds: true, // This will ignore all ESLint errors during build
   },
   async redirects() {
@@ -19,14 +18,7 @@ const nextConfig = {
       },
     ]
   },
-  async middleware() {
-    return {
-      matcher: [
-        // Skip static files and api routes
-        '/((?!_next/static|_next/image|favicon.ico).*)',
-      ],
-    }
-  },
+  // Remove the middleware section from here
 }
 
 module.exports = nextConfig
