@@ -284,73 +284,77 @@ const getColorClasses = (color: string): string => {
           </Button>
         </div>
 
-        {/* Active Strategy */}
-        <div className="px-4 pb-4">
-          <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-            {/* Header with edit button */}
-                      <div className="p-4 border-b border-gray-700 bg-gray-800/50">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 text-blue-400" />
-                  <span className="text-sm font-medium text-white">Active Strategy</span>
-                </div>
-                <div className="flex gap-1">
-                  <button 
-                    onClick={() => {
-                      setEditingStrategy(currentStrategy)
-                      setShowStrategyModal(true)
-                      setIsCreatingNew(false)
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-                    title="Edit Strategy"
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setIsCreatingNew(true)
-                      setShowStrategyModal(true)
-                      setEditingStrategy(null)
-                    }}
-                    className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-                    title="Create New Strategy"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
-                className="w-full flex items-center justify-between text-left mb-3 hover:bg-gray-700/50 rounded p-2 transition-colors"
+{/* Active Strategy */}
+<div className="px-4 pb-4">
+  <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-visible"> {/* Changed overflow to visible */}
+    <div className="p-4 border-b border-gray-700 bg-gray-800/50">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Target className="h-4 w-4 text-blue-400" />
+          <span className="text-sm font-medium text-white">Active Strategy</span>
+        </div>
+        <div className="flex gap-1">
+          <button 
+            onClick={() => {
+              setEditingStrategy(currentStrategy)
+              setShowStrategyModal(true)
+              setIsCreatingNew(false)
+            }}
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+            title="Edit Strategy"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+          </button>
+          <button 
+            onClick={() => {
+              setIsCreatingNew(true)
+              setShowStrategyModal(true)
+              setEditingStrategy(null)
+            }}
+            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+            title="Create New Strategy"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      
+      <div className="relative"> {/* This wrapper is important for positioning */}
+        <button 
+          onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
+          className="w-full flex items-center justify-between text-left mb-3 hover:bg-gray-700/50 rounded p-2 transition-colors"
+        >
+          <span className="text-sm text-gray-300">{currentStrategy}</span>
+          <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showStrategyDropdown ? 'rotate-180' : ''}`} />
+        </button>
+        
+        {/* Strategy Dropdown */}
+        {showStrategyDropdown && (
+          <div className="absolute left-0 right-0 top-full bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-50 mt-1"> {/* Increased z-index */}
+            {(Object.keys(strategies) as StrategyName[]).map((strategy) => (
+              <button
+                key={strategy}
+                onClick={() => {
+                  setCurrentStrategy(strategy)
+                  setShowStrategyDropdown(false)
+                }}
+                className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-700 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                  strategy === currentStrategy ? 'bg-blue-500/10 text-blue-400' : 'text-gray-300'
+                }`}
               >
-                <span className="text-sm text-gray-300">{currentStrategy}</span>
-                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showStrategyDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              
-              {/* Strategy Dropdown */}
-              {showStrategyDropdown && (
-                <div className="absolute top-full left-4 right-4 bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-10 mt-1">
-                  {(Object.keys(strategies) as StrategyName[]).map((strategy) => (
-                    <button
-                      key={strategy}
-                      onClick={() => {
-                        setCurrentStrategy(strategy)
-                        setShowStrategyDropdown(false)
-                      }}
-                      className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-700 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                        strategy === currentStrategy ? 'bg-blue-500/10 text-blue-400' : 'text-gray-300'
-                      }`}
-                    >
-                      <div className="font-medium">{strategy}</div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {strategies[strategy].pairs.slice(0, 3).join(', ')}
-                        {strategies[strategy].pairs.length > 3 && '...'}
-                      </div>
-                    </button>
-                  ))}
+                <div className="font-medium">{strategy}</div>
+                <div className="text-xs text-gray-400 mt-1">
+                  {strategies[strategy].pairs.slice(0, 3).join(', ')}
+                  {strategies[strategy].pairs.length > 3 && '...'}
                 </div>
-              )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      
+
+      
               
               {/* Preferred Pairs */}
               <div className="mb-3">
