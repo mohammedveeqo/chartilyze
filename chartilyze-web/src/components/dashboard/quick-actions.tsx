@@ -1,7 +1,28 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Target, CheckCircle, XCircle, Settings, Upload, Clock, Camera, ChevronDown, Edit3, Copy, Trash2, Save, X } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { UserButton } from "@clerk/nextjs"
+import { 
+  Plus, 
+  Target, 
+  CheckCircle, 
+  XCircle, 
+  Settings, 
+  Upload, 
+  Clock, 
+  Camera,
+  ChevronDown,
+  Edit3,
+  Save,
+  X,
+  LayoutDashboard,
+  BookOpen,
+  BarChart2,
+  Users,
+  LogOut
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Trade {
@@ -22,6 +43,29 @@ interface Strategy {
 
 type StrategyName = 'Breakout Scalping' | 'Swing Trading' | 'News Trading'
 
+const navigationItems = [
+  {
+    name: 'Dashboard',
+    icon: LayoutDashboard,
+    href: '/dashboard'
+  },
+  {
+    name: 'Journal',
+    icon: BookOpen,
+    href: '/journal'
+  },
+  {
+    name: 'Analytics',
+    icon: BarChart2,
+    href: '/analytics'
+  },
+  {
+    name: 'Community',
+    icon: Users,
+    href: '/community'
+  }
+]
+
 export function QuickActions() {
   const [showAddTrade, setShowAddTrade] = useState<boolean>(false)
   const [showStrategyModal, setShowStrategyModal] = useState<boolean>(false)
@@ -29,7 +73,8 @@ export function QuickActions() {
   const [editingStrategy, setEditingStrategy] = useState<StrategyName | null>(null)
   const [isCreatingNew, setIsCreatingNew] = useState<boolean>(false)
   const [currentStrategy, setCurrentStrategy] = useState<StrategyName>('Breakout Scalping')
-  
+  const pathname = usePathname()
+
   const [strategies, setStrategies] = useState<Record<StrategyName, Strategy>>({
     'Breakout Scalping': {
       pairs: ['EURUSD', 'GBPJPY', 'AUDUSD', 'USDJPY'],
@@ -62,22 +107,20 @@ export function QuickActions() {
       ]
     }
   })
-  
+
   const currentStrategyData = strategies[currentStrategy]
   const recentTrades = currentStrategyData.trades
 
-const getColorClasses = (color: string): string => {
-  const colors: Record<string, string> = {
-    blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    green: 'bg-green-500/10 text-green-400 border-green-500/20',
-    purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    orange: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-    red: 'bg-red-500/10 text-red-400 border-red-500/20'
+  const getColorClasses = (color: string): string => {
+    const colors: Record<string, string> = {
+      blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+      green: 'bg-green-500/10 text-green-400 border-green-500/20',
+      purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+      orange: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+      red: 'bg-red-500/10 text-red-400 border-red-500/20'
+    }
+    return colors[color as keyof typeof colors] || colors.blue
   }
-  return colors[color as keyof typeof colors] || colors.blue
-}
-
-
   const StrategyModal = () => {
     const [formData, setFormData] = useState({
       name: editingStrategy || '',
@@ -87,7 +130,6 @@ const getColorClasses = (color: string): string => {
     })
 
     const handleSave = () => {
-      // Logic to save strategy would go here
       console.log('Saving strategy:', formData)
       setShowStrategyModal(false)
       setEditingStrategy(null)
@@ -271,167 +313,199 @@ const getColorClasses = (color: string): string => {
   )
 
   return (
-    <>
-      <div className="w-80 h-screen sticky top-0">
-        {/* Add Trade CTA */}
-        <div className="p-4">
-          <Button 
-            onClick={() => setShowAddTrade(true)}
-            className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-3 px-4 font-medium transition-colors flex items-center justify-center gap-2"
-          >
-            <Plus className="h-5 w-5" />
-            Add Trade
-          </Button>
+    <div className="w-80 bg-gray-900 border-r border-gray-800 h-screen flex flex-col sticky top-0">
+      {/* Brand + Profile */}
+      <div className="p-6 border-b border-gray-800">
+        <div className="flex items-center justify-between mb-6">
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold">C</span>
+            </div>
+            <span className="text-lg font-semibold text-white">Chartilyze</span>
+          </Link>
         </div>
-
-{/* Active Strategy */}
-<div className="px-4 pb-4">
-  <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-visible"> {/* Changed overflow to visible */}
-    <div className="p-4 border-b border-gray-700 bg-gray-800/50">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <Target className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium text-white">Active Strategy</span>
-        </div>
-        <div className="flex gap-1">
-          <button 
-            onClick={() => {
-              setEditingStrategy(currentStrategy)
-              setShowStrategyModal(true)
-              setIsCreatingNew(false)
-            }}
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-            title="Edit Strategy"
-          >
-            <Edit3 className="h-3.5 w-3.5" />
-          </button>
-          <button 
-            onClick={() => {
-              setIsCreatingNew(true)
-              setShowStrategyModal(true)
-              setEditingStrategy(null)
-            }}
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-            title="Create New Strategy"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+        
+        {/* Profile Section */}
+        <div className="flex items-center gap-3">
+          <UserButton afterSignOutUrl="/sign-in" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-white truncate">John Doe</div>
+            <div className="text-xs text-gray-400">Pro Plan</div>
+          </div>
         </div>
       </div>
-      
-      <div className="relative"> {/* This wrapper is important for positioning */}
-        <button 
-          onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
-          className="w-full flex items-center justify-between text-left mb-3 hover:bg-gray-700/50 rounded p-2 transition-colors"
-        >
-          <span className="text-sm text-gray-300">{currentStrategy}</span>
-          <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${showStrategyDropdown ? 'rotate-180' : ''}`} />
-        </button>
-        
-        {/* Strategy Dropdown */}
-        {showStrategyDropdown && (
-          <div className="absolute left-0 right-0 top-full bg-gray-800 border border-gray-600 rounded-lg shadow-lg z-50 mt-1"> {/* Increased z-index */}
-            {(Object.keys(strategies) as StrategyName[]).map((strategy) => (
-              <button
-                key={strategy}
-                onClick={() => {
-                  setCurrentStrategy(strategy)
-                  setShowStrategyDropdown(false)
-                }}
-                className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-700 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                  strategy === currentStrategy ? 'bg-blue-500/10 text-blue-400' : 'text-gray-300'
+
+      {/* Main Navigation */}
+      <nav className="p-4">
+        <div className="space-y-1">
+          {navigationItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                  isActive 
+                    ? 'bg-gray-800 text-white' 
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
                 }`}
               >
-                <div className="font-medium">{strategy}</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {strategies[strategy].pairs.slice(0, 3).join(', ')}
-                  {strategies[strategy].pairs.length > 3 && '...'}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      
+                <item.icon className="h-5 w-5" />
+                <span>{item.name}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </nav>
 
-      
-              
-              {/* Preferred Pairs */}
-              <div className="mb-3">
+      {/* Add Trade Button */}
+      <div className="p-4 border-t border-gray-800">
+        <Button 
+          onClick={() => setShowAddTrade(true)}
+          className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded-lg py-3 px-4 font-medium transition-colors flex items-center justify-center gap-2"
+        >
+          <Plus className="h-5 w-5" />
+          Add Trade
+        </Button>
+      </div>
+
+      {/* Active Strategy Section */}
+      <div className="px-4 flex-shrink-0">
+        <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-visible">
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-blue-400" />
+                <span className="text-sm font-medium text-white">Active Strategy</span>
+              </div>
+              <div className="flex gap-1">
+                <button 
+                  onClick={() => {
+                    setEditingStrategy(currentStrategy)
+                    setShowStrategyModal(true)
+                    setIsCreatingNew(false)
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setIsCreatingNew(true)
+                    setShowStrategyModal(true)
+                    setEditingStrategy(null)
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Strategy Selector */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
+                className="w-full flex items-center justify-between text-left mb-3 px-3 py-2 bg-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <span className="text-sm text-white">{currentStrategy}</span>
+                <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${
+                  showStrategyDropdown ? 'rotate-180' : ''
+                }`} />
+              </button>
+
+              {showStrategyDropdown && (
+                <div className="absolute left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
+                  {(Object.keys(strategies) as StrategyName[]).map((strategy) => (
+                    <button
+                      key={strategy}
+                      onClick={() => {
+                        setCurrentStrategy(strategy)
+                        setShowStrategyDropdown(false)
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-700 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                        strategy === currentStrategy ? 'bg-blue-500/10 text-blue-400' : 'text-gray-300'
+                      }`}
+                    >
+                      <div className="font-medium">{strategy}</div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {strategies[strategy].pairs.slice(0, 3).join(', ')}
+                        {strategies[strategy].pairs.length > 3 && '...'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Strategy Details */}
+            <div className="space-y-3">
+              <div>
                 <div className="text-xs text-gray-400 mb-2">Preferred Pairs</div>
                 <div className="flex flex-wrap gap-1">
                   {currentStrategyData.pairs.map((pair, i) => (
-                    <span key={i} className={`text-xs px-2 py-1 rounded border ${getColorClasses(currentStrategyData.color)}`}>
+                    <span key={i} className={`text-xs px-2 py-1 rounded border ${
+                      getColorClasses(currentStrategyData.color)
+                    }`}>
                       {pair}
                     </span>
                   ))}
                 </div>
               </div>
-              
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400">Last trade adherence</span>
-                <div className="flex gap-1">
-                  <CheckCircle className="h-3 w-3 text-green-400" />
-                  <CheckCircle className="h-3 w-3 text-green-400" />
-                  <XCircle className="h-3 w-3 text-red-400" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Trades */}
-        <div className="px-4 flex-1">
-          <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Recent Trades
-          </h3>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {recentTrades.map((trade: Trade, i: number) => (
-              <div key={i} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50 hover:bg-gray-800 transition-colors cursor-pointer">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-sm text-white">{trade.symbol}</span>
-                  <span className={`text-xs px-2 py-1 rounded ${
-                    trade.outcome === 'win' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
-                  }`}>
-                    {trade.pnl}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">R:R {trade.rr}</span>
-                  <div className="flex gap-1">
-                    {trade.rules.map((followed: boolean, j: number) => (
-                      followed ? 
-                        <CheckCircle key={j} className="h-3 w-3 text-green-400" /> :
-                        <XCircle key={j} className="h-3 w-3 text-red-400" />
-                    ))}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500 mt-1">{trade.time}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-800">
-          <div className="flex items-center justify-between">
-            <button className="p-2 text-gray-400 hover:text-white transition-colors">
-              <Settings className="h-5 w-5" />
-            </button>
-            <button className="p-2 text-gray-400 hover:text-white transition-colors">
-              <Upload className="h-5 w-5" />
-            </button>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-              <span className="text-green-400">TradingView</span>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Recent Trades */}
+      <div className="px-4 flex-1 overflow-hidden flex flex-col">
+        <h3 className="text-sm font-medium text-gray-300 my-4 flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          Recent Trades
+        </h3>
+        <div className="space-y-2 overflow-y-auto flex-1 pr-2">
+          {recentTrades.map((trade: Trade, i: number) => (
+            <div key={i} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50 hover:bg-gray-800 transition-colors cursor-pointer">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium text-sm text-white">{trade.symbol}</span>
+                <span className={`text-xs px-2 py-1 rounded ${
+                  trade.outcome === 'win' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                }`}>
+                  {trade.pnl}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">R:R {trade.rr}</span>
+                <div className="flex gap-1">
+                  {trade.rules.map((followed: boolean, j: number) => (
+                    followed ? 
+                      <CheckCircle key={j} className="h-3 w-3 text-green-400" /> :
+                      <XCircle key={j} className="h-3 w-3 text-red-400" />
+                  ))}
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 mt-1">{trade.time}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-gray-800 mt-auto">
+        <div className="flex items-center justify-between">
+          <button className="p-2 text-gray-400 hover:text-white transition-colors">
+            <Settings className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-2 h-2 bg-green-400 rounded-full" />
+            <span className="text-green-400">TradingView Connected</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Modals */}
       {showAddTrade && <AddTradeModal />}
       {showStrategyModal && <StrategyModal />}
-    </>
+    </div>
   )
 }
