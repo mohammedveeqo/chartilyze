@@ -3,6 +3,9 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true, // This will ignore all ESLint errors during build
   },
+  images: {
+    domains: ['i.ibb.co'],
+  },
   async redirects() {
     return [
       {
@@ -18,7 +21,7 @@ const nextConfig = {
       },
     ]
   },
-  // Remove the middleware section from here
 }
 
 module.exports = nextConfig
+

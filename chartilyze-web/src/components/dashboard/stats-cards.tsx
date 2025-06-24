@@ -48,13 +48,22 @@ const coreStats: StatCard[] = [
 
 // Data for the Quote of the Day
 const quotes = [
-  "Boring trades are good trades.",
-  "Amateurs think about how much money they can make. Professionals think about how much money they can lose.",
-  "The trend is your friend until it bends.",
-  "Never confuse a single loss with a final defeat.",
-  "What's comfortable is rarely profitable.",
-  "Trade what you see, not what you think."
-]
+  "A 1:2 risk-reward with just a 40% win rate still makes you consistently profitable.",
+  "You can lose more trades than you win and still come out ahead — if your R:R is right.",
+  "The market doesn’t pay you for being right — it pays you for managing risk.",
+  "A single oversized trade can undo weeks of discipline.",
+  "Risk comes first. Reward is just potential.",
+  "Trading is simple: plan the trade, control the risk, accept the outcome.",
+  "Professionals think in probabilities. Amateurs think in absolutes.",
+  "You can’t control outcome — only process and position size.",
+  "Consistency in execution beats brilliance in analysis.",
+  "Focus on setups that repeat. Not setups that excite.",
+  "Without a stop-loss, you’re just gambling.",
+  "Your next trade doesn’t need to win — it just needs to follow the plan.",
+  "1:3 R:R with 30% accuracy beats 1:1 R:R with 60% accuracy.",
+  "Protecting your downside is the only way to stay in the game.",
+  "Your job is to take good trades — not to force great outcomes."
+];
 
 // Function to get a random quote
 const getRandomQuote = () => quotes[Math.floor(Math.random() * quotes.length)]
