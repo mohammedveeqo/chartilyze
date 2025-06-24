@@ -12,11 +12,10 @@ import { RecentTrades } from "@/components/dashboard/recent-trades";
 import { PerformanceChart } from "@/components/dashboard/performance-chart";
 import { TradingCalendar } from "@/components/dashboard/trading-calendar";
 import { PsychologyInsights } from "@/components/dashboard/psychology-insights";
-import { QuickActions } from "@/components/dashboard/quick-actions";
+import { Sidebar } from "@/components/navigation/sidebar"; // Update import path as needed
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { DebugAuth } from "@/components/debug-auth";
 import TradeDetails from "@/components/dashboard/trade-details";
-
 
 export default function DashboardClient() {
   const { user } = useUser();
@@ -52,43 +51,40 @@ export default function DashboardClient() {
     );
   }
 
- return (
-  <div className="min-h-screen bg-gray-950 flex">
-    {/* Sidebar */}
-    <aside className="w-[280px] hidden lg:flex flex-col border-r border-gray-800 p-4 bg-gray-900">
-      <QuickActions />
-      {/* Optional: Add strategy summary, recent trades, etc. */}
-    </aside>
+  return (
+    <div className="min-h-screen bg-gray-950 flex">
+      {/* Sidebar */}
+      <Sidebar />
 
-    {/* Main Content */}
-    <main className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-      {!journalsData.hasJournals && <OnboardingWizard />}
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+        {!journalsData.hasJournals && <OnboardingWizard />}
 
-      {journalsData.hasJournals && (
-        <>
-          <StatsCards />
-          <TradeDetails />
+        {journalsData.hasJournals && (
+          <>
+            <StatsCards />
+            <TradeDetails />
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <div className="xl:col-span-2">
-              <PerformanceChart />
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2">
+                <PerformanceChart />
+              </div>
+              <div className="xl:col-span-1">
+                <PsychologyInsights />
+              </div>
             </div>
-            <div className="xl:col-span-1">
-              <PsychologyInsights />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            <div className="xl:col-span-2">
-              <RecentTrades />
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2">
+                <RecentTrades />
+              </div>
+              <div className="xl:col-span-1">
+                <TradingCalendar />
+              </div>
             </div>
-            <div className="xl:col-span-1">
-              <TradingCalendar />
-            </div>
-          </div>
-        </>
-      )}
-    </main>
-  </div>
-);
+          </>
+        )}
+      </main>
+    </div>
+  );
 }
