@@ -54,7 +54,43 @@ const initialStrategies: StrategiesRecord = {
           tags: ['NFP', 'High Impact News']
         }
       },
-      // Add more trades with similar structure...
+      {
+        id: '2',
+        symbol: 'GBPJPY',
+        rr: '1:1.8',
+        outcome: 'loss',
+        rules: [true, true, true],
+        time: '5h ago',
+        type: 'SHORT',
+        entryPrice: 157.50,
+        exitPrice: 157.80,
+        date: '2023-06-24T07:45:00Z',
+        pnl: -85,
+        riskRewardRatio: 1.8,
+        adherenceScore: 1,
+        status: 'LOSS',
+        chart: {
+          imageUrl: 'https://example.com/chart2.png',
+          annotations: []
+        },
+        analysis: {
+          technical: 'False breakout on resistance',
+          psychological: 'Slightly overconfident',
+          rulesFollowed: ['Trend confirmation', 'Volume spike present', 'Risk management sized'],
+          lessonsLearned: 'Wait for clearer confirmation before entry',
+          emotionalState: 'Frustrated',
+          confidenceLevel: 6
+        },
+        metadata: {
+          timeframe: '5m',
+          position: {
+            size: 0.5,
+            risk: 30
+          },
+          strategy: 'Breakout Scalping',
+          tags: ['London Session', 'False Breakout']
+        }
+      }
     ]
   },
   'Swing Trading': {
@@ -62,7 +98,43 @@ const initialStrategies: StrategiesRecord = {
     rules: ['Daily trend alignment', 'Support/Resistance level', 'RSI confirmation'],
     color: 'green',
     trades: [
-      // Add trades with the new structure...
+      {
+        id: '3',
+        symbol: 'XAUUSD',
+        rr: '1:3.5',
+        outcome: 'win',
+        rules: [true, true, true],
+        time: '2d ago',
+        type: 'LONG',
+        entryPrice: 1920.50,
+        exitPrice: 1955.25,
+        date: '2023-06-22T14:00:00Z',
+        pnl: 347,
+        riskRewardRatio: 3.5,
+        adherenceScore: 1,
+        status: 'WIN',
+        chart: {
+          imageUrl: 'https://example.com/chart3.png',
+          annotations: []
+        },
+        analysis: {
+          technical: 'Strong support level with bullish divergence',
+          psychological: 'Patient and disciplined',
+          rulesFollowed: ['Daily trend alignment', 'Support/Resistance level', 'RSI confirmation'],
+          lessonsLearned: 'Patience pays off in swing trading',
+          emotionalState: 'Satisfied',
+          confidenceLevel: 9
+        },
+        metadata: {
+          timeframe: '4h',
+          position: {
+            size: 0.25,
+            risk: 100
+          },
+          strategy: 'Swing Trading',
+          tags: ['Gold', 'Bullish Divergence']
+        }
+      }
     ]
   },
   'News Trading': {
@@ -70,10 +142,47 @@ const initialStrategies: StrategiesRecord = {
     rules: ['High impact news', 'Pre-news setup', 'Quick exit plan'],
     color: 'purple',
     trades: [
-      // Add trades with the new structure...
+      {
+        id: '4',
+        symbol: 'USDJPY',
+        rr: '1:2.1',
+        outcome: 'win',
+        rules: [true, false, true],
+        time: '1d ago',
+        type: 'SHORT',
+        entryPrice: 143.20,
+        exitPrice: 142.55,
+        date: '2023-06-23T13:30:00Z',
+        pnl: 195,
+        riskRewardRatio: 2.1,
+        adherenceScore: 0.67,
+        status: 'WIN',
+        chart: {
+          imageUrl: 'https://example.com/chart4.png',
+          annotations: []
+        },
+        analysis: {
+          technical: 'Sharp reaction to BOJ announcement',
+          psychological: 'Slightly nervous but focused',
+          rulesFollowed: ['High impact news', 'Quick exit plan'],
+          lessonsLearned: 'Need to improve pre-news setup',
+          emotionalState: 'Excited',
+          confidenceLevel: 7
+        },
+        metadata: {
+          timeframe: '1m',
+          position: {
+            size: 1,
+            risk: 60
+          },
+          strategy: 'News Trading',
+          tags: ['BOJ', 'Interest Rate Decision']
+        }
+      }
     ]
   }
 }
+
 
 export const useStrategy = create<StrategyStore>((set) => ({
   currentStrategy: 'Breakout Scalping',
