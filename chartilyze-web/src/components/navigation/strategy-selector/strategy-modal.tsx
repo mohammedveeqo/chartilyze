@@ -2,9 +2,30 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Save, X, Wand2, Check, Edit3, Tag } from 'lucide-react'
+import { Save, X, Wand2, Plus, Trash2, Edit3, Tag, ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import { useStrategy } from '@/app/hooks/use-strategy'
-import type { StrategyFormData, StructuredRule } from '@/types/strategy'
+import { useAction } from 'convex/react'
+import { api } from '../../../../../chartilyze-backend/convex/_generated/api'
+import type { StrategyFormData } from '@/types/strategy'
+
+interface StrategyComponent {
+  id: string
+  type: 'entry' | 'exit' | 'risk_management' | 'position_sizing' | 'market_condition' | 'level_marking' | 'confirmation'
+  name: string
+  description: string
+  tags: string[]
+  indicators?: Array<{
+    name: string
+    condition: string
+    value: string
+    timeframe?: string
+  }>
+  patterns?: string[]
+  confidence: number
+  priority: 'high' | 'medium' | 'low'
+  timeframes?: string[]
+  conditions?: string[]
+}
 
 interface StrategyModalProps {
   isCreatingNew: boolean
@@ -13,17 +34,61 @@ interface StrategyModalProps {
 
 export function StrategyModal({ isCreatingNew, onClose }: StrategyModalProps) {
   const { editingStrategy, strategies } = useStrategy()
+  const parseStrategyAction = useAction(api.aiStrategy.parseStrategy) // Changed from useMutation to useAction
   
-  const [step, setStep] = useState<'description' | 'review' | 'edit'>('description')
+  const [step, setStep] = useState<'input' | 'processing' | 'review' | 'edit'>('input')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [formData, setFormData] = useState<StrategyFormData>({
-    name: editingStrategy || '',
-    pairs: editingStrategy ? strategies[editingStrategy].pairs.join(', ') : '',
-    rules: editingStrategy ? strategies[editingStrategy].rules.join('\n') : '',
-    color: editingStrategy ? strategies[editingStrategy].color : 'blue',
-    description: '',
-    structuredRules: [],
-    tags: []
+  const [expandedComponents, setExpandedComponents] = useState<Set<string>>(new Set())
+  const [showOriginalText, setShowOriginalText] = useState(false)
+  
+  // Pre-filled strategy for testing
+  const testStrategy = `# Identify Storyline (Trend Bias)
+If Monthly rejection + Weekly breakout, then Monthly turns bearish ($$B$$)
+If Monthly rejection + Weekly breakout, then Monthly turns bullish ($$b$$)
+Record bias per timeframe (Monthly, Weekly, Daily) in a log with last update date/time
+
+# Mark Key Levels
+OCL - Origin Candle Level (usually the rejection candle + adjacent wick)
+STFL - Second Timeframe Level (key level inside OCL; must be fresh)
+TTFL - Third Timeframe Level (refinement inside STFL; use support/resistance or 50% equilibrium)
+
+# Entry Construction
+Draw box from OCL body to wick, extend one step right
+Identify first fresh key level (support, resistance, QM, SBR/SBR) inside box → this is STFL
+Go one timeframe lower, mark TTFL at next clear key level or STFL box equilibrium
+Place entry on TTFL line
+Set SL: 5.5 or 7 pips for USDJPY, 3 pips for gold
+Add 0.5-1 pip spread buffer toward SL to guarantee fill
+
+# Risk Management
+Normal risk on strong FTFL (previous candle formed it and next candle tapped it)
+Reduce risk to ~20% on weak/aged FTFL (price skips FTFL for 1 full period)
+
+# Target Placement
+If no obstacle on entry timeframe, let trade run to previous period extreme
+If obstacles exist, manage with partial TP or stop adjust
+
+# Confirmation Entries (when FTFL not tapped promptly)
+Wait for continuation/reversal pattern on current timeframe before trading
+New trade targets previous period extreme on that (current) timeframe
+
+# 14B Entry Model (Continuation/Confirmation)
+1h path: 1h reject → 1h S/R → 1h breakout → enter at 1h mid-wick
+4h path: 4h reject → 4h S/R → 4h breakout → enter at 1h equilibrium inside 4h S/R
+
+# D1W4 Entry Model (Pullback/Confirmation)
+Daily: 1h mitigates Daily key level, 1h breakout
+Weekly: 4h mitigates Weekly key level, 4h breakout
+Entries: 1h S/R equilibrium, 1h QM equilibrium (smaller size)`
+  
+  const [strategyData, setStrategyData] = useState({
+    name: '',
+    originalDescription: testStrategy, // Pre-filled for testing
+    description: testStrategy, // Pre-filled for testing
+    components: [] as StrategyComponent[],
+    globalTags: [] as string[],
+    complexity: 'intermediate' as 'simple' | 'intermediate' | 'advanced',
+    color: editingStrategy ? strategies[editingStrategy].color : 'blue'
   })
 
   // Handle escape key
@@ -38,67 +103,133 @@ export function StrategyModal({ isCreatingNew, onClose }: StrategyModalProps) {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [onClose])
 
-  // Mock AI parsing function (replace with actual AI service)
-  const parseStrategyDescription = async (description: string): Promise<{
-    structuredRules: StructuredRule[],
-    tags: string[],
-    suggestedName: string
-  }> => {
+  const handleProcessStrategy = async () => {
+    if (!strategyData.description.trim()) return
+    
     setIsProcessing(true)
+    setStep('processing')
     
-    // Simulate AI processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    // Mock parsing logic - replace with actual AI service
-    const mockRules: StructuredRule[] = [
-      {
-        id: '1',
-        pattern: 'bullish engulfing',
-        indicator: {
-          type: 'RSI',
-          condition: '<',
-          value: 30
-        },
-        context: 'support',
-        direction: 'long',
-        confidence: 0.85
+    try {
+      console.log('🚀 Starting enhanced strategy parsing with description:', strategyData.description)
+      console.log('📊 Strategy data before parsing:', strategyData)
+      
+      // Store original description
+      setStrategyData(prev => ({
+        ...prev,
+        originalDescription: prev.description
+      }))
+      
+      console.log('📡 Calling DeepSeek API with params:', {
+        description: strategyData.description,
+        complexity: 'advanced',
+        enhancedParsing: true
+      })
+      
+      // Always use advanced parsing with enhanced prompting
+      const result = await parseStrategyAction({ // Changed from parseStrategyMutation to parseStrategyAction
+        description: strategyData.description,
+        complexity: 'advanced',
+        enhancedParsing: true
+      })
+      
+      console.log('✅ Received enhanced result from AI:', result)
+      console.log('🔍 Result components count:', result.components?.length || 0)
+      console.log('🏷️ Result global tags:', result.globalTags)
+      console.log('📝 Result suggested name:', result.suggestedName)
+      
+      // Convert AI result to enhanced components
+      const components: StrategyComponent[] = result.components.map((comp: any) => {
+        console.log('🔧 Processing component:', comp)
+        return {
+          id: comp.id,
+          type: comp.type,
+          name: comp.name || comp.description.substring(0, 50) + '...',
+          description: comp.description,
+          tags: comp.tags || [],
+          indicators: comp.indicators || [],
+          patterns: comp.patterns || [],
+          confidence: comp.confidence || 0.7,
+          priority: comp.priority || 'medium',
+          timeframes: comp.timeframes || [],
+          conditions: comp.conditions || []
+        }
+      })
+      
+      console.log('🎯 Processed enhanced components:', components)
+      
+      const newStrategyData = {
+        ...strategyData,
+        name: result.suggestedName || 'Multi-Timeframe Strategy',
+        components,
+        globalTags: result.globalTags,
+        complexity: result.complexity
       }
-    ]
-    
-    const mockTags = [
-      'pattern:bullish-engulfing',
-      'indicator:rsi<30',
-      'context:support',
-      'direction:long'
-    ]
-    
-    setIsProcessing(false)
-    return {
-      structuredRules: mockRules,
-      tags: mockTags,
-      suggestedName: 'RSI Oversold Reversal'
+      
+      console.log('💾 Setting new strategy data:', newStrategyData)
+      
+      setStrategyData(newStrategyData)
+      setStep('review')
+      setIsProcessing(false)
+      
+      console.log('✨ Strategy parsing completed successfully')
+    } catch (error) {
+      console.error('❌ Failed to process strategy:', error)
+      console.error('🔍 Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        type: typeof error
+      })
+      alert(`Strategy parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setIsProcessing(false)
+      setStep('input')
     }
   }
 
-  const handleProcessDescription = async () => {
-    if (!formData.description.trim()) return
-    
-    try {
-      const result = await parseStrategyDescription(formData.description)
-      setFormData(prev => ({
-        ...prev,
-        structuredRules: result.structuredRules,
-        tags: result.tags,
-        name: prev.name || result.suggestedName
-      }))
-      setStep('review')
-    } catch (error) {
-      console.error('Failed to parse strategy:', error)
+  const toggleComponentExpansion = (componentId: string) => {
+    const newExpanded = new Set(expandedComponents)
+    if (newExpanded.has(componentId)) {
+      newExpanded.delete(componentId)
+    } else {
+      newExpanded.add(componentId)
     }
+    setExpandedComponents(newExpanded)
+  }
+
+  const addCustomComponent = () => {
+    const newComponent: StrategyComponent = {
+      id: `custom-${Date.now()}`,
+      type: 'entry',
+      name: 'Custom Component',
+      description: '',
+      tags: [],
+      confidence: 0.5,
+      priority: 'medium'
+    }
+    
+    setStrategyData(prev => ({
+      ...prev,
+      components: [...prev.components, newComponent]
+    }))
+  }
+
+  const updateComponent = (componentId: string, updates: Partial<StrategyComponent>) => {
+    setStrategyData(prev => ({
+      ...prev,
+      components: prev.components.map(comp => 
+        comp.id === componentId ? { ...comp, ...updates } : comp
+      )
+    }))
+  }
+
+  const removeComponent = (componentId: string) => {
+    setStrategyData(prev => ({
+      ...prev,
+      components: prev.components.filter(comp => comp.id !== componentId)
+    }))
   }
 
   const handleSave = () => {
-    console.log('Saving strategy:', formData)
+    console.log('Saving enhanced strategy:', strategyData)
     onClose()
   }
 
@@ -108,35 +239,33 @@ export function StrategyModal({ isCreatingNew, onClose }: StrategyModalProps) {
     }
   }
 
-  const renderDescriptionStep = () => (
-    <div className="space-y-4">
+  const renderInputStep = () => (
+    <div className="space-y-6">
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          Describe Your Trading Strategy
+        <label className="block text-lg font-medium text-white mb-3">
+          Strategy Description
         </label>
-        <textarea 
-          value={formData.description}
-          onChange={(e) => setFormData({...formData, description: e.target.value})}
-          placeholder={`Describe your strategy in plain language...
-
-Example: "I buy when RSI is below 30 and there's a bullish engulfing pattern at a support level. I target 2:1 risk-reward and use 1% position sizing."`}
-          rows={8}
-          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none"
+        <textarea
+          value={strategyData.description}
+          onChange={(e) => setStrategyData(prev => ({ ...prev, description: e.target.value }))}
+          placeholder="Describe your complete trading strategy in detail..."
+          rows={20}
+          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none resize-none font-mono text-sm"
         />
-        <p className="text-xs text-gray-500 mt-2">
-          💡 Be specific about indicators, patterns, entry/exit conditions, and risk management
+        <p className="text-sm text-gray-400 mt-2">
+          💡 Use markdown-style headers (# ## ###) to organize complex strategies. The AI will parse these into separate components.
         </p>
       </div>
       
       <button 
-        onClick={handleProcessDescription}
-        disabled={!formData.description.trim() || isProcessing}
+        onClick={handleProcessStrategy}
+        disabled={!strategyData.description.trim() || isProcessing}
         className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2"
       >
         {isProcessing ? (
           <>
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-            Processing with AI...
+            Processing with Enhanced AI...
           </>
         ) : (
           <>
@@ -148,75 +277,227 @@ Example: "I buy when RSI is below 30 and there's a bullish engulfing pattern at 
     </div>
   )
 
+  const renderProcessingStep = () => (
+    <div className="flex flex-col items-center justify-center py-20">
+      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mb-6"></div>
+      <h3 className="text-xl font-semibold text-white mb-2">Processing Your Strategy</h3>
+      <p className="text-gray-400 text-center max-w-md">
+        Our AI is analyzing your strategy description and breaking it down into actionable components with detailed tags.
+      </p>
+    </div>
+  )
+
   const renderReviewStep = () => (
-    <div className="space-y-4">
-      {/* Strategy Name */}
+    <div className="space-y-6">
+      {/* Strategy Name Input */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Strategy Name</label>
-        <input 
-          type="text" 
-          value={formData.name}
-          onChange={(e) => setFormData({...formData, name: e.target.value})}
+        <label className="block text-lg font-medium text-white mb-3">
+          Strategy Name
+        </label>
+        <input
+          type="text"
+          value={strategyData.name}
+          onChange={(e) => setStrategyData(prev => ({ ...prev, name: e.target.value }))}
           placeholder="Enter strategy name"
           className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
         />
       </div>
 
-      {/* Parsed Rules */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <label className="block text-sm font-medium text-gray-300">Parsed Rules</label>
-          <button 
-            onClick={() => setStep('edit')}
-            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-          >
-            <Edit3 className="h-3 w-3" />
-            Edit
-          </button>
-        </div>
-        <div className="space-y-2">
-          {formData.structuredRules.map((rule, index) => (
-            <div key={rule.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-white">Rule {index + 1}</span>
-                <span className="text-xs text-gray-400">
-                  {Math.round((rule.confidence || 0) * 100)}% confidence
-                </span>
-              </div>
-              <div className="text-sm text-gray-300 space-y-1">
-                {rule.pattern && <div><span className="text-gray-400">Pattern:</span> {rule.pattern}</div>}
-                {rule.indicator && (
-                  <div>
-                    <span className="text-gray-400">Indicator:</span> {rule.indicator.type} {rule.indicator.condition} {rule.indicator.value}
-                  </div>
-                )}
-                {rule.context && <div><span className="text-gray-400">Context:</span> {rule.context}</div>}
-                {rule.direction && <div><span className="text-gray-400">Direction:</span> {rule.direction}</div>}
-              </div>
-            </div>
-          ))}
+      {/* Original Strategy Text Toggle */}
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <button
+          onClick={() => setShowOriginalText(!showOriginalText)}
+          className="flex items-center gap-2 text-white hover:text-blue-300 transition-colors"
+        >
+          <FileText className="h-4 w-4" />
+          {showOriginalText ? 'Hide' : 'Show'} Original Strategy Text
+        </button>
+        {showOriginalText && (
+          <div className="mt-4 p-4 bg-gray-900 rounded border border-gray-600">
+            <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
+              {strategyData.originalDescription}
+            </pre>
+            <button
+              onClick={() => {
+                setStrategyData(prev => ({ ...prev, description: prev.originalDescription }))
+                setStep('input')
+              }}
+              className="mt-3 px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-500 transition-colors"
+            >
+              Edit Original Text
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Strategy Overview */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h3 className="text-lg font-semibold text-white mb-4">Strategy Overview</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <span className="text-sm text-gray-400">Complexity</span>
+            <p className="text-white font-medium capitalize">{strategyData.complexity}</p>
+          </div>
+          <div>
+            <span className="text-sm text-gray-400">Components</span>
+            <p className="text-white font-medium">{strategyData.components.length}</p>
+          </div>
+          <div>
+            <span className="text-sm text-gray-400">Total Tags</span>
+            <p className="text-white font-medium">
+              {strategyData.components.reduce((acc, comp) => acc + comp.tags.length, 0) + strategyData.globalTags.length}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Auto-generated Tags */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          <Tag className="h-4 w-4 inline mr-1" />
-          Auto-generated Tags
-        </label>
+      {/* Global Tags */}
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Tag className="h-5 w-5" />
+          Global Strategy Tags
+        </h3>
         <div className="flex flex-wrap gap-2">
-          {formData.tags.map((tag, index) => (
-            <span 
-              key={index}
-              className="px-2 py-1 bg-blue-600/20 text-blue-300 text-xs rounded border border-blue-600/30"
-            >
+          {strategyData.globalTags.map((tag, index) => (
+            <span key={index} className="px-3 py-1 bg-blue-600/20 text-blue-300 text-sm rounded-full border border-blue-600/30">
               {tag}
             </span>
           ))}
         </div>
-        <p className="text-xs text-gray-500 mt-1">
-          These tags will be used for filtering and performance analysis
-        </p>
+      </div>
+
+      {/* Strategy Components */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Strategy Components</h3>
+          <button
+            onClick={addCustomComponent}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Component
+          </button>
+        </div>
+        
+        {strategyData.components.map((component) => (
+          <div key={component.id} className="bg-gray-800 rounded-lg border border-gray-700">
+            <div 
+              className="p-4 cursor-pointer flex items-center justify-between hover:bg-gray-750 transition-colors"
+              onClick={() => toggleComponentExpansion(component.id)}
+            >
+              <div className="flex items-center gap-3">
+                {expandedComponents.has(component.id) ? 
+                  <ChevronDown className="h-4 w-4 text-gray-400" /> : 
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                }
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      component.type === 'entry' ? 'bg-green-600/20 text-green-300' :
+                      component.type === 'exit' ? 'bg-red-600/20 text-red-300' :
+                      component.type === 'risk_management' ? 'bg-orange-600/20 text-orange-300' :
+                      component.type === 'position_sizing' ? 'bg-purple-600/20 text-purple-300' :
+                      component.type === 'level_marking' ? 'bg-yellow-600/20 text-yellow-300' :
+                      component.type === 'confirmation' ? 'bg-cyan-600/20 text-cyan-300' :
+                      'bg-blue-600/20 text-blue-300'
+                    }`}>
+                      {component.type.replace('_', ' ')}
+                    </span>
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      component.priority === 'high' ? 'bg-red-600/20 text-red-300' :
+                      component.priority === 'medium' ? 'bg-yellow-600/20 text-yellow-300' :
+                      'bg-gray-600/20 text-gray-300'
+                    }`}>
+                      {component.priority} priority
+                    </span>
+                  </div>
+                  <p className="text-white font-medium mt-1">{component.name}</p>
+                  <p className="text-sm text-gray-400">Confidence: {Math.round(component.confidence * 100)}%</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-400">{component.tags.length} tags</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    removeComponent(component.id)
+                  }}
+                  className="p-1 hover:bg-red-600/20 rounded transition-colors"
+                >
+                  <Trash2 className="h-4 w-4 text-red-400" />
+                </button>
+              </div>
+            </div>
+            
+            {expandedComponents.has(component.id) && (
+              <div className="px-4 pb-4 border-t border-gray-700">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Component Name</label>
+                    <input
+                      value={component.name}
+                      onChange={(e) => updateComponent(component.id, { name: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm mb-3"
+                    />
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                    <textarea
+                      value={component.description}
+                      onChange={(e) => updateComponent(component.id, { description: e.target.value })}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Component Tags</label>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {component.tags.map((tag, tagIndex) => (
+                        <span key={tagIndex} className="px-2 py-1 bg-gray-600 text-gray-200 text-xs rounded flex items-center gap-1">
+                          {tag}
+                          <button
+                            onClick={() => {
+                              const newTags = component.tags.filter((_, i) => i !== tagIndex)
+                              updateComponent(component.id, { tags: newTags })
+                            }}
+                            className="text-red-400 hover:text-red-300"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Add tags (comma separated)"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const newTags = (e.target as HTMLInputElement).value.split(',').map(t => t.trim()).filter(Boolean)
+                          updateComponent(component.id, { tags: [...component.tags, ...newTags] })
+                          ;(e.target as HTMLInputElement).value = ''
+                        }
+                      }}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
+                    />
+                  </div>
+                </div>
+                
+                {component.conditions && component.conditions.length > 0 && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">Conditions</label>
+                    <div className="space-y-1">
+                      {component.conditions.map((condition, condIndex) => (
+                        <div key={condIndex} className="text-sm text-gray-300 bg-gray-700 px-2 py-1 rounded">
+                          {condition}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Color Selection */}
@@ -226,9 +507,9 @@ Example: "I buy when RSI is below 30 and there's a bullish engulfing pattern at 
           {['blue', 'green', 'purple', 'orange', 'red'].map((color) => (
             <button
               key={color}
-              onClick={() => setFormData({...formData, color})}
+              onClick={() => setStrategyData(prev => ({ ...prev, color }))}
               className={`w-8 h-8 rounded-full border-2 transition-all ${
-                formData.color === color 
+                strategyData.color === color 
                   ? 'border-white scale-110' 
                   : 'border-gray-600 hover:border-gray-400'
               }`}
@@ -243,39 +524,26 @@ Example: "I buy when RSI is below 30 and there's a bullish engulfing pattern at 
           ))}
         </div>
       </div>
-
-      {/* Preferred Pairs */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">Preferred Currency Pairs</label>
-        <input 
-          type="text" 
-          value={formData.pairs}
-          onChange={(e) => setFormData({...formData, pairs: e.target.value})}
-          placeholder="EURUSD, GBPJPY, AUDUSD, USDJPY"
-          className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-        />
-        <p className="text-xs text-gray-500 mt-1">Separate pairs with commas</p>
-      </div>
     </div>
   )
 
   const modalContent = (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4"
+      className="fixed inset-0 bg-black/50 flex items-start justify-center z-[9999] p-4 pt-8 pb-8 overflow-y-auto"
       onClick={handleBackdropClick}
     >
-      <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-5xl min-h-[80vh] max-h-none flex flex-col my-auto">
         {/* Header */}
-        <div className="p-4 border-b border-gray-700">
+        <div className="flex-shrink-0 p-6 border-b border-gray-700">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-xl font-semibold text-white">
                 {isCreatingNew ? 'Create New Strategy' : `Edit ${editingStrategy}`}
               </h3>
               <p className="text-sm text-gray-400 mt-1">
-                {step === 'description' && 'Describe your strategy in natural language'}
-                {step === 'review' && 'Review AI-parsed rules and tags'}
-                {step === 'edit' && 'Fine-tune your strategy rules'}
+                {step === 'input' && 'Describe your strategy in detail for AI analysis'}
+                {step === 'processing' && 'AI is analyzing your strategy'}
+                {step === 'review' && 'Review and customize your strategy components'}
               </p>
             </div>
             <button 
@@ -290,36 +558,37 @@ Example: "I buy when RSI is below 30 and there's a bullish engulfing pattern at 
           {/* Progress Steps */}
           <div className="flex items-center gap-2 mt-4">
             <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
-              step === 'description' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
+              step === 'input' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
             }`}>
-              1. Describe
+              1. Input
+            </div>
+            <div className="w-8 h-px bg-gray-600"></div>
+            <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
+              step === 'processing' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
+            }`}>
+              2. Processing
             </div>
             <div className="w-8 h-px bg-gray-600"></div>
             <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
               step === 'review' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
             }`}>
-              2. Review
-            </div>
-            <div className="w-8 h-px bg-gray-600"></div>
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
-              step === 'edit' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
-            }`}>
-              3. Save
+              3. Review
             </div>
           </div>
         </div>
         
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {step === 'description' && renderDescriptionStep()}
+        <div className="flex-1 overflow-y-auto p-6">
+          {step === 'input' && renderInputStep()}
+          {step === 'processing' && renderProcessingStep()}
           {step === 'review' && renderReviewStep()}
         </div>
         
         {/* Footer */}
-        <div className="p-4 border-t border-gray-700 flex gap-3">
+        <div className="flex-shrink-0 p-6 border-t border-gray-700 flex gap-3">
           {step === 'review' && (
             <button 
-              onClick={() => setStep('description')}
+              onClick={() => setStep('input')}
               className="py-3 px-4 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors font-medium"
             >
               Back
