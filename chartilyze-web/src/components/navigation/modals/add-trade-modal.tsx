@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Camera } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { Camera, X } from 'lucide-react'
 import { useStrategy } from '@/app/hooks/use-strategy'
 import type { Strategy } from '@/types/strategy'
 import type { CreateTradeDTO, TradeType, TradeTimeframe } from '@/types/trade'
@@ -135,18 +136,51 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">Add New Trade</h3>
-          <p className="text-sm text-gray-400 mt-1">Capture your setup and reflect on execution</p>
+  // Add escape key handler
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [onClose])
+
+  // Handle backdrop click
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
+  }
+
+  const modalContent = (
+    <div 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-gray-900 rounded-xl border border-gray-700 w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+        {/* Header with close button */}
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Add New Trade</h3>
+            <p className="text-sm text-gray-400 mt-1">Capture your setup and reflect on execution</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label="Close modal"
+          >
+            <X className="h-5 w-5 text-gray-400" />
+          </button>
         </div>
         
-        <div className="p-6 space-y-6">
-          {/* Chart Upload */}
-          <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-blue-500/50 transition-colors cursor-pointer">
-            <Camera className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Chart Upload - Smaller */}
+          <div className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-blue-500/50 transition-colors cursor-pointer">
+            <Camera className="h-6 w-6 text-gray-400 mx-auto mb-2" />
             <p className="text-sm text-gray-400">Upload chart screenshot</p>
             <p className="text-xs text-gray-500 mt-1">From TradingView or manual capture</p>
           </div>
@@ -159,7 +193,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
                 <button
                   key={type}
                   onClick={() => handleInputChange('type', type)}
-                  className={`flex-1 py-2 px-4 rounded-lg border ${
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm ${
                     formData.type === type
                       ? 'bg-blue-500/10 border-blue-500/50 text-blue-400'
                       : 'border-gray-700 text-gray-400 hover:border-gray-600'
@@ -171,8 +205,8 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
             </div>
           </div>
           
-          {/* Trade Details */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Trade Details - Compact grid */}
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <label className="block text-xs text-gray-400 mb-1">Entry</label>
               <input 
@@ -181,7 +215,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
                 value={formData.entryPrice || ''}
                 onChange={(e) => handleInputChange('entryPrice', parseFloat(e.target.value))}
                 placeholder="1.0850" 
-                className={`w-full bg-gray-800 border rounded px-3 py-2 text-sm text-white ${
+                className={`w-full bg-gray-800 border rounded px-2 py-1.5 text-sm text-white ${
                   errors.entryPrice ? 'border-red-500' : 'border-gray-600'
                 }`}
               />
@@ -197,7 +231,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
                 value={formData.stopLoss || ''}
                 onChange={(e) => handleInputChange('stopLoss', parseFloat(e.target.value))}
                 placeholder="1.0830" 
-                className={`w-full bg-gray-800 border rounded px-3 py-2 text-sm text-white ${
+                className={`w-full bg-gray-800 border rounded px-2 py-1.5 text-sm text-white ${
                   errors.stopLoss ? 'border-red-500' : 'border-gray-600'
                 }`}
               />
@@ -213,7 +247,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
                 value={formData.takeProfit || ''}
                 onChange={(e) => handleInputChange('takeProfit', parseFloat(e.target.value))}
                 placeholder="1.0890" 
-                className={`w-full bg-gray-800 border rounded px-3 py-2 text-sm text-white ${
+                className={`w-full bg-gray-800 border rounded px-2 py-1.5 text-sm text-white ${
                   errors.takeProfit ? 'border-red-500' : 'border-gray-600'
                 }`}
               />
@@ -223,8 +257,8 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
             </div>
           </div>
 
-          {/* Position Size and Risk */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Position Size and Risk - Compact */}
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs text-gray-400 mb-1">Position Size</label>
               <input 
@@ -233,7 +267,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
                 value={formData.position.size || ''}
                 onChange={(e) => handleInputChange('positionSize', parseFloat(e.target.value))}
                 placeholder="0.10" 
-                className={`w-full bg-gray-800 border rounded px-3 py-2 text-sm text-white ${
+                className={`w-full bg-gray-800 border rounded px-2 py-1.5 text-sm text-white ${
                   errors.positionSize ? 'border-red-500' : 'border-gray-600'
                 }`}
               />
@@ -246,7 +280,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
                 value={formData.position.risk || ''}
                 onChange={(e) => handleInputChange('risk', parseFloat(e.target.value))}
                 placeholder="50" 
-                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
               />
             </div>
           </div>
@@ -257,7 +291,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
             <select
               value={formData.timeframe}
               onChange={(e) => handleInputChange('timeframe', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
             >
               {timeframes.map((tf) => (
                 <option key={tf} value={tf}>{tf}</option>
@@ -265,12 +299,12 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
             </select>
           </div>
           
-          {/* Strategy Rules */}
+          {/* Strategy Rules - Compact */}
           <div>
-            <label className="block text-sm text-gray-300 mb-3">Strategy Rules Followed</label>
-            <div className="space-y-2">
+            <label className="block text-sm text-gray-300 mb-2">Strategy Rules Followed</label>
+            <div className="space-y-1.5">
               {currentStrategyData.rules.map((rule: string, i: number) => (
-                <label key={i} className="flex items-center gap-3 cursor-pointer">
+                <label key={i} className="flex items-center gap-2 cursor-pointer">
                   <input 
                     type="checkbox"
                     checked={rulesFollowed[i]}
@@ -283,40 +317,46 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
             </div>
           </div>
 
-          {/* Analysis */}
+          {/* Analysis - Smaller */}
           <div>
             <label className="block text-sm text-gray-300 mb-2">Technical Analysis</label>
             <textarea
               value={formData.analysis?.technical || ''}
               onChange={(e) => handleInputChange('technical', e.target.value)}
               placeholder="Describe your technical analysis..."
-              className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white h-20 resize-none"
+              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-sm text-white h-16 resize-none"
             />
           </div>
         </div>
         
-        <div className="p-6 border-t border-gray-700 flex gap-3">
+        {/* Footer buttons */}
+        <div className="p-4 border-t border-gray-700 flex gap-3">
           <button 
             onClick={onClose}
-            className="flex-1 py-2 px-4 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+            className="flex-1 py-2 px-4 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
           >
             Cancel
           </button>
           <button 
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {isSubmitting ? 'Adding...' : 'Save Trade'}
           </button>
         </div>
 
         {errors.submit && (
-          <div className="px-6 pb-4">
+          <div className="px-4 pb-4">
             <p className="text-sm text-red-500">{errors.submit}</p>
           </div>
         )}
       </div>
     </div>
   )
+
+  // Use React Portal to render outside the main DOM tree
+  return typeof window !== 'undefined' 
+    ? createPortal(modalContent, document.body)
+    : null
 }

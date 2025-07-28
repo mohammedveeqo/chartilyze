@@ -3,7 +3,7 @@
 // Trade outcome and status types
 export type TradeOutcome = 'win' | 'loss'
 export type TradeStatus = 'WIN' | 'LOSS'
-export type TradeType = 'LONG' | 'SHORT'
+export type TradeType = 'LONG' | 'SHORSST'
 export type TradeTimeframe = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d' | '1w'
 
 // Chart related interfaces

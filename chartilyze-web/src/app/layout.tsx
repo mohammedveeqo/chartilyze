@@ -1,7 +1,7 @@
 // app/layout.tsx
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import './globals copy.css'
+import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ConvexClientProvider } from './providers'
 
