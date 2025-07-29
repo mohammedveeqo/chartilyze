@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../chartilyze-backend/convex/_generated/api";
@@ -12,8 +12,9 @@ import { RecentTrades } from "@/components/dashboard/recent-trades";
 import { PerformanceChart } from "@/components/dashboard/performance-chart";
 import { TradingCalendar } from "@/components/dashboard/trading-calendar";
 import { PsychologyInsights } from "@/components/dashboard/psychology-insights";
-import { Sidebar } from "@/components/navigation/sidebar"; // Update import path as needed
-import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
+import { Sidebar } from "@/components/navigation/sidebar";
+import { StrategyModal } from "@/components/navigation/strategy-selector/strategy-modal";
+import { EmptyJournalState } from "@/components/dashboard/empty-journal-state";
 import { DebugAuth } from "@/components/debug-auth";
 import TradeDetails from "@/components/dashboard/trade-details";
 
@@ -21,6 +22,7 @@ export default function DashboardClient() {
   const { user } = useUser();
   const storeUser = useMutation(api.users.storeUser);
   const journalsData = useQuery(api.journals.getUserJournals);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Store user in Convex when component mounts
   useEffect(() => {
@@ -42,6 +44,13 @@ export default function DashboardClient() {
     initializeUser();
   }, [user, storeUser]);
 
+  // Show welcome modal for new users instead of blocking onboarding
+  useEffect(() => {
+    if (journalsData && !journalsData.hasJournals) {
+      setShowWelcomeModal(true);
+    }
+  }, [journalsData]);
+
   // Show loading state while fetching journals
   if (journalsData === undefined) {
     return (
@@ -56,11 +65,12 @@ export default function DashboardClient() {
       {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Content */}
+      {/* Main Content - Always show dashboard */}
       <main className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-        {!journalsData.hasJournals && <OnboardingWizard />}
-
-        {journalsData.hasJournals && (
+        {/* Show empty state for new users */}
+        {!journalsData.hasJournals ? (
+          <EmptyJournalState onCreateStrategy={() => setShowWelcomeModal(true)} />
+        ) : (
           <>
             <StatsCards />
             <TradeDetails />
@@ -85,6 +95,15 @@ export default function DashboardClient() {
           </>
         )}
       </main>
+
+      {/* Welcome Modal for new users */}
+      {showWelcomeModal && (
+        <StrategyModal 
+          isCreatingNew={true} 
+          onClose={() => setShowWelcomeModal(false)}
+          isWelcomeFlow={true}
+        />
+      )}
     </div>
   );
 }

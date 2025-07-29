@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Save, X, Wand2, Plus, Trash2, Edit3, Tag, ChevronDown, ChevronRight, FileText } from 'lucide-react'
 import { useStrategy } from '@/app/hooks/use-strategy'
-import { useAction } from 'convex/react'
+import { useAction, useMutation } from 'convex/react'
 import { api } from '../../../../../chartilyze-backend/convex/_generated/api'
 import type { StrategyFormData } from '@/types/strategy'
+import { toast } from 'sonner'
 
 interface StrategyComponent {
   id: string
@@ -30,11 +31,13 @@ interface StrategyComponent {
 interface StrategyModalProps {
   isCreatingNew: boolean
   onClose: () => void
+  isWelcomeFlow?: boolean
 }
 
-export function StrategyModal({ isCreatingNew, onClose }: StrategyModalProps) {
+export function StrategyModal({ isCreatingNew, onClose, isWelcomeFlow = false }: StrategyModalProps) {
   const { editingStrategy, strategies } = useStrategy()
-  const parseStrategyAction = useAction(api.aiStrategy.parseStrategy) // Changed from useMutation to useAction
+  const parseStrategyAction = useAction(api.aiStrategy.parseStrategy)
+  const createJournal = useMutation(api.journals.create)
   
   const [step, setStep] = useState<'input' | 'processing' | 'review' | 'edit'>('input')
   const [isProcessing, setIsProcessing] = useState(false)
@@ -228,9 +231,51 @@ Entries: 1h S/R equilibrium, 1h QM equilibrium (smaller size)`
     }))
   }
 
-  const handleSave = () => {
-    console.log('Saving enhanced strategy:', strategyData)
-    onClose()
+  const handleSave = async () => {
+    if (!strategyData.name.trim()) {
+      toast.error('Please enter a strategy name')
+      return
+    }
+
+    try {
+      setIsProcessing(true)
+      
+      // Create journal with enhanced strategy data
+      const journalData = {
+        name: strategyData.name,
+        description: strategyData.description || `AI-enhanced trading strategy: ${strategyData.name}`,
+        strategy: {
+          name: strategyData.name,
+          rules: strategyData.originalDescription ? [strategyData.originalDescription] : [],
+          // Include AI-enhanced data
+          components: strategyData.components,
+          globalTags: strategyData.globalTags,
+          complexity: strategyData.complexity,
+     
+        },
+        settings: {
+          defaultRiskPercentage: 1,
+          defaultPositionSize: 100
+        }
+      }
+
+      await createJournal(journalData)
+      
+      if (isWelcomeFlow) {
+        toast.success('Welcome! Your first strategy has been created successfully!')
+        // Refresh the page to show the dashboard with data
+        window.location.reload()
+      } else {
+        toast.success('Strategy saved successfully!')
+      }
+      
+      onClose()
+    } catch (error) {
+      console.error('Error saving strategy:', error)
+      toast.error('Failed to save strategy')
+    } finally {
+      setIsProcessing(false)
+    }
   }
 
   const handleBackdropClick = (e: React.MouseEvent) => {
