@@ -6,16 +6,19 @@ import { StrategyModal } from './strategy-modal'
 import { StrategyDropdown } from './strategy-dropdown'
 import { StrategyDetails } from './strategy-details'
 import { useCurrentStrategy, useStrategies } from '@/app/hooks/use-strategy'
+import { EditStrategyModal } from './edit-strategy-modal'
 
 export function StrategySelector() {
   const [showModal, setShowModal] = useState(false)
   const [isCreatingNew, setIsCreatingNew] = useState(false)
+  const [editingStrategyId, setEditingStrategyId] = useState<string | null>(null)
   const { currentStrategy } = useCurrentStrategy()
   const { hasStrategies } = useStrategies()
 
   const handleEditStrategy = () => {
-    setShowModal(true)
-    setIsCreatingNew(false)
+    if (currentStrategy) {
+      setEditingStrategyId(currentStrategy.id)
+    }
   }
 
   const handleCreateNew = () => {
@@ -62,6 +65,13 @@ export function StrategySelector() {
             setShowModal(false)
             setIsCreatingNew(false)
           }}
+        />
+      )}
+
+      {editingStrategyId && (
+        <EditStrategyModal
+          strategyId={editingStrategyId}
+          onClose={() => setEditingStrategyId(null)}
         />
       )}
     </div>
