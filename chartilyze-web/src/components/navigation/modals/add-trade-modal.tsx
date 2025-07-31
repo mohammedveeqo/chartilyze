@@ -37,7 +37,7 @@ const initialFormData: CreateTradeDTO = {
 }
 
 const timeframes: TradeTimeframe[] = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
-const tradeTypes: TradeType[] = ['LONG', 'SHORT']
+const tradeTypes: TradeType[] = ['LONG', 'SHORSST']
 
 export function AddTradeModal({ onClose }: AddTradeModalProps) {
   const { currentStrategy, strategies } = useStrategy()
