@@ -15,9 +15,52 @@ export default defineSchema({
     userId: v.string(), // This will store the Clerk ID
     name: v.string(),
     description: v.optional(v.string()),
+    // Enhanced strategy structure to match AI parsing output
     strategy: v.optional(v.object({
       name: v.string(),
-      rules: v.array(v.string())
+      rules: v.array(v.string()),
+      // AI-enhanced fields
+      components: v.optional(v.array(v.object({
+        id: v.string(),
+        type: v.union(
+          v.literal('entry'),
+          v.literal('exit'), 
+          v.literal('risk_management'),
+          v.literal('position_sizing'),
+          v.literal('market_condition'),
+          v.literal('level_marking'),
+          v.literal('confirmation')
+        ),
+        name: v.string(),
+        description: v.string(),
+        indicators: v.optional(v.array(v.object({
+          name: v.string(),
+          condition: v.string(),
+          value: v.string(),
+          timeframe: v.optional(v.string())
+        }))),
+        patterns: v.optional(v.array(v.string())),
+        confidence: v.number(),
+        priority: v.union(
+          v.literal('high'),
+          v.literal('medium'),
+          v.literal('low')
+        ),
+        tags: v.array(v.string()),
+        timeframes: v.optional(v.array(v.string())),
+        conditions: v.optional(v.array(v.string()))
+      }))),
+      globalTags: v.optional(v.array(v.string())),
+      complexity: v.optional(v.union(
+        v.literal('simple'),
+        v.literal('intermediate'),
+        v.literal('advanced')
+      )),
+      riskProfile: v.optional(v.union(
+        v.literal('conservative'),
+        v.literal('moderate'),
+        v.literal('aggressive')
+      ))
     })),
     settings: v.optional(v.object({
       defaultRiskPercentage: v.number(),

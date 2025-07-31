@@ -5,13 +5,23 @@ import { Target, Edit3, Plus } from 'lucide-react'
 import { StrategyModal } from './strategy-modal'
 import { StrategyDropdown } from './strategy-dropdown'
 import { StrategyDetails } from './strategy-details'
-import { useStrategy } from '@/app/hooks/use-strategy'
- 
+import { useCurrentStrategy, useStrategies } from '@/app/hooks/use-strategy'
+
 export function StrategySelector() {
   const [showModal, setShowModal] = useState(false)
-  const [showDropdown, setShowDropdown] = useState(false)
   const [isCreatingNew, setIsCreatingNew] = useState(false)
-  const { currentStrategy, setEditingStrategy } = useStrategy()
+  const { currentStrategy } = useCurrentStrategy()
+  const { hasStrategies } = useStrategies()
+
+  const handleEditStrategy = () => {
+    setShowModal(true)
+    setIsCreatingNew(false)
+  }
+
+  const handleCreateNew = () => {
+    setIsCreatingNew(true)
+    setShowModal(true)
+  }
 
   return (
     <div className="px-4 flex-shrink-0">
@@ -23,22 +33,16 @@ export function StrategySelector() {
               <span className="text-sm font-medium text-white">Active Strategy</span>
             </div>
             <div className="flex gap-1">
-              <button 
-                onClick={() => {
-                  setEditingStrategy(currentStrategy)
-                  setShowModal(true)
-                  setIsCreatingNew(false)
-                }}
-                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
-              >
-                <Edit3 className="h-3.5 w-3.5" />
-              </button>
-              <button 
-                onClick={() => {
-                  setIsCreatingNew(true)
-                  setShowModal(true)
-                  setEditingStrategy(null)
-                }}
+              {hasStrategies && (
+                <button
+                  onClick={handleEditStrategy}
+                  className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                onClick={handleCreateNew}
                 className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -46,16 +50,13 @@ export function StrategySelector() {
             </div>
           </div>
 
-          <StrategyDropdown 
-            isOpen={showDropdown}
-            onToggle={() => setShowDropdown(!showDropdown)}
-          />
+          <StrategyDropdown onClose={() => {}} />
           <StrategyDetails />
         </div>
       </div>
 
       {showModal && (
-        <StrategyModal 
+        <StrategyModal
           isCreatingNew={isCreatingNew}
           onClose={() => {
             setShowModal(false)

@@ -78,9 +78,22 @@ export const update = mutation({
     id: v.id("journals"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
+    // Update mutation args (around lines 81-87)
     strategy: v.optional(v.object({
       name: v.string(),
-      rules: v.array(v.string())
+      rules: v.array(v.string()),
+      components: v.optional(v.array(v.any())),
+      globalTags: v.optional(v.array(v.string())),
+      complexity: v.optional(v.union(
+        v.literal('simple'),
+        v.literal('intermediate'),
+        v.literal('advanced')
+      )),
+      riskProfile: v.optional(v.union(
+        v.literal('conservative'),
+        v.literal('moderate'),
+        v.literal('aggressive')
+      ))
     })),
     settings: v.optional(v.object({
       defaultRiskPercentage: v.number(),
@@ -141,17 +154,29 @@ export const deleteJournal = mutation({
   }
 });
 
-//
-
-// convex/journals.ts
+// Enhanced create mutation to handle AI strategy data
 export const create = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
+    // Create mutation args (around lines 153-162)
     strategy: v.optional(
       v.object({
         name: v.string(),
-        rules: v.array(v.string())
+        rules: v.array(v.string()),
+        // AI-enhanced fields
+        components: v.optional(v.array(v.any())),
+        globalTags: v.optional(v.array(v.string())),
+        complexity: v.optional(v.union(
+          v.literal('simple'),
+          v.literal('intermediate'),
+          v.literal('advanced')
+        )),
+        riskProfile: v.optional(v.union(
+          v.literal('conservative'),
+          v.literal('moderate'),
+          v.literal('aggressive')
+        ))
       })
     ),
     settings: v.optional(
@@ -162,11 +187,10 @@ export const create = mutation({
     )
   },
   handler: async (ctx, args) => {
-    // Add detailed logging
     console.log("Starting journal creation...");
     
     const identity = await ctx.auth.getUserIdentity();
-    console.log("Auth identity in create:", identity); // Log the identity
+    console.log("Auth identity in create:", identity);
 
     if (!identity) {
       console.log("No identity found in create mutation");
