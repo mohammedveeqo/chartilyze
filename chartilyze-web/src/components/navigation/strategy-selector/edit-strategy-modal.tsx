@@ -252,37 +252,6 @@ export function EditStrategyModal({ strategyId, onClose }: EditStrategyModalProp
                   />
                 </div>
 
-                {/* Strategy Overview */}
-                <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                  <h3 className="text-lg font-semibold text-white mb-4">Strategy Overview</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <span className="text-sm text-gray-400">Complexity</span>
-                      <select
-                        value={strategyData.complexity}
-                        onChange={(e) => setStrategyData(prev => ({ ...prev, complexity: e.target.value as any }))}
-                        className="w-full mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      >
-                        <option value="simple">Simple</option>
-                        <option value="intermediate">Intermediate</option>
-                        <option value="advanced">Advanced</option>
-                      </select>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-400">Risk Profile</span>
-                      <select
-                        value={strategyData.riskProfile}
-                        onChange={(e) => setStrategyData(prev => ({ ...prev, riskProfile: e.target.value as any }))}
-                        className="w-full mt-1 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm"
-                      >
-                        <option value="conservative">Conservative</option>
-                        <option value="moderate">Moderate</option>
-                        <option value="aggressive">Aggressive</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Global Tags */}
                 <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
                   <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -357,20 +326,17 @@ export function EditStrategyModal({ strategyId, onClose }: EditStrategyModalProp
                           <ChevronRight className="h-4 w-4 text-gray-400" />
                         }
                         <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              component.type === 'entry' ? 'bg-green-600/20 text-green-300' :
-                              component.type === 'exit' ? 'bg-red-600/20 text-red-300' :
-                              component.type === 'risk_management' ? 'bg-orange-600/20 text-orange-300' :
-                              component.type === 'position_sizing' ? 'bg-purple-600/20 text-purple-300' :
-                              component.type === 'level_marking' ? 'bg-yellow-600/20 text-yellow-300' :
-                              component.type === 'confirmation' ? 'bg-cyan-600/20 text-cyan-300' :
-                              'bg-blue-600/20 text-blue-300'
-                            }`}>
-                              {component.type.replace('_', ' ')}
-                            </span>
+                          <p className="text-white font-medium mb-2">{component.name}</p>
+                          <div className="flex flex-wrap gap-1">
+                            {component.tags.map((tag, index) => (
+                              <span key={index} className="px-2 py-1 bg-blue-600/20 text-blue-300 text-xs rounded border border-blue-600/30">
+                                {tag}
+                              </span>
+                            ))}
+                            {component.tags.length === 0 && (
+                              <span className="text-xs text-gray-500">No tags</span>
+                            )}
                           </div>
-                          <p className="text-white font-medium mt-1">{component.name}</p>
                         </div>
                       </div>
                       
