@@ -138,9 +138,8 @@ const analyzeImageWithDeepSeek = async (
       reader.onload = async () => {
         const result = reader.result as string;
         const base64String = result.split(',')[1];
-        // Compress the image before sending
         try {
-          const compressedBase64 = await compressImage(base64String, 800); // 800KB max
+          const compressedBase64 = await compressImage(base64String, 800);
           resolve(compressedBase64);
         } catch (compressionError) {
           console.warn('Image compression failed, using original:', compressionError);
@@ -151,22 +150,39 @@ const analyzeImageWithDeepSeek = async (
       reader.readAsDataURL(imageFile);
     });
 
-    // Rest of your existing code...
-    const prompt = `Tell me the context of this image. What do you see? Describe it in detail.
+    // Enhanced prompt for better trade analysis
+    const strategyContext = currentStrategy ? `
+Active Strategy: ${currentStrategy.name}
+Strategy Components: ${currentStrategy.components?.map((c: any) => c.name).join(', ') || 'None'}
+Strategy Rules: ${currentStrategy.rules?.join(', ') || 'None'}` : '';
+    
+    const prompt = `Analyze this trading chart image and extract trade information. ${strategyContext}
 
-Respond in JSON format with the following structure:
+Please identify:
+1. Trading symbol/pair
+2. Trade direction (LONG/SHORT)
+3. Risk/reward ratio
+4. Timeframe
+5. How this trade relates to the active strategy
+
+Respond in JSON format:
 {
-  "symbol": null,
-  "type": null,
-  "riskReward": null,
-  "timeframe": null,
-  "confidence": 1.0,
-  "reasoning": "Your detailed description of what you see in the image",
+  "symbol": "extracted symbol or null",
+  "type": "LONG or SHORT or null",
+  "riskReward": "number or null",
+  "timeframe": "timeframe or null",
+  "confidence": 0.75,
+  "reasoning": "detailed analysis of what you see",
   "extractedData": {
-    "hasSymbol": false,
-    "hasRiskReward": false,
-    "hasTimeframe": false,
-    "hasDirection": false
+    "hasSymbol": true/false,
+    "hasRiskReward": true/false,
+    "hasTimeframe": true/false,
+    "hasDirection": true/false
+  },
+  "strategyMatch": {
+    "matchedComponents": ["component names that match"],
+    "suggestedRules": ["relevant strategy rules"],
+    "matchConfidence": 0.8
   }
 }`;
 
@@ -176,22 +192,22 @@ Respond in JSON format with the following structure:
     });
 
     console.log('✅ DeepSeek response:', result);
-  
 
-    // Return the result with DeepSeek's description in the reasoning field
+    // Actually use the DeepSeek response data!
     return {
-      symbol: null,
-      type: null,
-      riskReward: null,
-      confidence: result.confidence || 1.0,
-      reasoning: result.reasoning || 'No description received',
-      timeframe: null,
+      symbol: result.symbol,
+      type: result.type,
+      riskReward: result.riskReward,
+      confidence: result.confidence || 0.75,
+      reasoning: result.reasoning || 'No analysis received',
+      timeframe: result.timeframe,
       extractedData: {
-        hasSymbol: false,
-        hasRiskReward: false,
-        hasTimeframe: false,
-        hasDirection: false
-      }
+        hasSymbol: !!result.symbol,
+        hasRiskReward: !!result.riskReward,
+        hasTimeframe: !!result.timeframe,
+        hasDirection: !!result.type
+      },
+      strategyMatch: result.strategyMatch
     };
   } catch (error) {
     console.error('❌ Error in image analysis:', error);
@@ -199,8 +215,8 @@ Respond in JSON format with the following structure:
       symbol: null,
       type: null,
       riskReward: null,
-      confidence: 0,
-      reasoning: 'Failed to analyze image automatically. Please enter details manually.',
+      confidence: 0.3,
+      reasoning: 'Analysis failed - please try again',
       timeframe: null,
       extractedData: {
         hasSymbol: false,

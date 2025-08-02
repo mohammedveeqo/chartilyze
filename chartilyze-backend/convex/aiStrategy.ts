@@ -332,32 +332,33 @@ ${specificPrompt}`
 
       // Try to extract JSON from the response
       try {
-        // Find JSON object in the response
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error('No JSON found in response');
+        // Clean and parse the content
+        let cleanContent = content.trim();
+        if (cleanContent.startsWith('```json')) {
+          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
         }
-
-        const parsedContent = JSON.parse(jsonMatch[0]) as TradeAnalysis;
+  
+        const parsedResult = JSON.parse(cleanContent) as TradeAnalysis;
         
-        // Validate and clean up the response
+        // Ensure all required fields are present
         return {
-          symbol: parsedContent.symbol || null,
-          type: (parsedContent.type === 'LONG' || parsedContent.type === 'SHORT') ? parsedContent.type : null,
-          riskReward: typeof parsedContent.riskReward === 'number' ? parsedContent.riskReward : null,
-          confidence: typeof parsedContent.confidence === 'number' ? 
-            Math.max(0, Math.min(1, parsedContent.confidence)) : 0.5,
-          reasoning: parsedContent.reasoning || 'No explanation provided',
-          timeframe: parsedContent.timeframe || null,
+          symbol: parsedResult.symbol || null,
+          type: parsedResult.type || null,
+          riskReward: parsedResult.riskReward || null,
+          confidence: parsedResult.confidence || 0.5,
+          reasoning: parsedResult.reasoning || 'Analysis completed',
+          timeframe: parsedResult.timeframe || null,
           extractedData: {
-            hasSymbol: Boolean(parsedContent.symbol),
-            hasRiskReward: Boolean(parsedContent.riskReward),
-            hasTimeframe: Boolean(parsedContent.timeframe),
-            hasDirection: Boolean(parsedContent.type)
-          }
+            hasSymbol: !!parsedResult.symbol,
+            hasRiskReward: !!parsedResult.riskReward,
+            hasTimeframe: !!parsedResult.timeframe,
+            hasDirection: !!parsedResult.type
+          },
+          strategyMatch: parsedResult.strategyMatch || undefined
         };
+  
       } catch (parseError) {
-        console.error('💥 Error parsing JSON from response:', parseError);
+        console.error('💥 JSON parsing failed:', parseError);
         throw new Error('Failed to parse structured response');
       }
 
