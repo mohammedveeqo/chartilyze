@@ -8,6 +8,55 @@ import { useAction, useMutation } from 'convex/react'
 import { api } from '/home/Rassell/chartilyze/chartilyze-backend/convex/_generated/api'
 import { toast } from 'sonner'
 
+async function compressImage(base64String: string, maxSizeKB: number = 800): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = `data:image/jpeg;base64,${base64String}`;
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      // Calculate new dimensions while maintaining aspect ratio
+      const maxDimension = 1024; // Maximum dimension
+      if (width > height && width > maxDimension) {
+        height *= maxDimension / width;
+        width = maxDimension;
+      } else if (height > maxDimension) {
+        width *= maxDimension / height;
+        height = maxDimension;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Start with high quality
+      let quality = 0.7; // Reduced initial quality
+      let output = canvas.toDataURL('image/jpeg', quality);
+      
+      // Reduce quality until file size is under maxSizeKB
+      while (output.length > maxSizeKB * 1024 && quality > 0.1) {
+        quality -= 0.1;
+        output = canvas.toDataURL('image/jpeg', quality);
+      }
+
+      resolve(output.split(',')[1]); // Remove data:image/jpeg;base64, prefix
+    };
+
+    img.onerror = () => reject(new Error('Failed to load image'));
+  });
+}
+
+
 // Types
 interface AddTradeModalProps {
   onClose: () => void
@@ -75,68 +124,77 @@ const EMOTIONAL_STATES: { value: EmotionalState; label: string; color: string }[
 const TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w']
 const COMMON_RR_RATIOS = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
 
-// DeepSeek AI Analysis Function (Updated for RR focus)
-const analyzeImageWithDeepSeek = async (imageFile: File, currentStrategy: any): Promise<AIAnalysisResult> => {
-  const base64Image = await new Promise<string>((resolve) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.readAsDataURL(imageFile)
-  })
-
-  const strategyContext = currentStrategy ? `
-Current Strategy Context:
-- Name: ${currentStrategy.name}
-- Rules: ${currentStrategy.rules?.join(', ')}
-- Components: ${currentStrategy.components?.map((c: any) => c.name).join(', ')}
-- Risk Profile: ${currentStrategy.riskProfile}
-` : ''
-
-  const prompt = `Analyze this trading chart image and extract the following information:
-
-1. Symbol/Currency Pair
-2. Trade Direction (LONG/SHORT)
-3. Risk-Reward Ratio (focus on this - calculate from visible levels)
-4. Timeframe (if visible)
-5. Trading setup reasoning
-
-${strategyContext}
-
-Focus primarily on identifying the Risk-Reward ratio rather than specific price levels.
-If you can see entry, stop loss, and take profit levels, calculate the RR ratio.
-
-Respond in JSON format:
-{
-  "symbol": "string|null",
-  "type": "LONG|SHORT|null",
-  "riskReward": "number|null",
-  "timeframe": "string|null",
-  "confidence": "number",
-  "reasoning": "string",
-  "extractedData": {
-    "hasSymbol": "boolean",
-    "hasRiskReward": "boolean",
-    "hasTimeframe": "boolean",
-    "hasDirection": "boolean"
-  },
-  "strategyMatch": {
-    "matchedComponents": ["string"],
-    "suggestedRules": ["string"],
-    "matchConfidence": "number"
-  }
-}`
-
+const analyzeImageWithDeepSeek = async (
+  imageFile: File,
+  currentStrategy: any,
+  analyzeTradeImageAction: any
+): Promise<AIAnalysisResult> => {
   try {
-    const response = await fetch('/api/analyze-trade-image', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64Image, prompt })
-    })
+    console.log('🔍 Starting image analysis with DeepSeek...');
+    
+    // Convert image to base64
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const result = reader.result as string;
+        const base64String = result.split(',')[1];
+        // Compress the image before sending
+        try {
+          const compressedBase64 = await compressImage(base64String, 800); // 800KB max
+          resolve(compressedBase64);
+        } catch (compressionError) {
+          console.warn('Image compression failed, using original:', compressionError);
+          resolve(base64String);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(imageFile);
+    });
 
-    if (!response.ok) throw new Error('Analysis failed')
-    return await response.json()
+    // Rest of your existing code...
+    const prompt = `Tell me the context of this image. What do you see? Describe it in detail.
+
+Respond in JSON format with the following structure:
+{
+  "symbol": null,
+  "type": null,
+  "riskReward": null,
+  "timeframe": null,
+  "confidence": 1.0,
+  "reasoning": "Your detailed description of what you see in the image",
+  "extractedData": {
+    "hasSymbol": false,
+    "hasRiskReward": false,
+    "hasTimeframe": false,
+    "hasDirection": false
+  }
+}`;
+
+    const result = await analyzeTradeImageAction({
+      imageBase64: base64,
+      prompt: prompt
+    });
+
+    console.log('✅ DeepSeek response:', result);
+  
+
+    // Return the result with DeepSeek's description in the reasoning field
+    return {
+      symbol: null,
+      type: null,
+      riskReward: null,
+      confidence: result.confidence || 1.0,
+      reasoning: result.reasoning || 'No description received',
+      timeframe: null,
+      extractedData: {
+        hasSymbol: false,
+        hasRiskReward: false,
+        hasTimeframe: false,
+        hasDirection: false
+      }
+    };
   } catch (error) {
-    console.error('DeepSeek analysis failed:', error)
-    // Return fallback analysis
+    console.error('❌ Error in image analysis:', error);
     return {
       symbol: null,
       type: null,
@@ -150,11 +208,14 @@ Respond in JSON format:
         hasTimeframe: false,
         hasDirection: false
       }
-    }
+    };
   }
-}
+};
 
 export function AddTradeModal({ onClose }: AddTradeModalProps) {
+  // Add this line near the top of the component
+  const analyzeTradeImageAction = useAction(api.aiStrategy.analyzeTradeImage);
+  
   const [currentStep, setCurrentStep] = useState<ModalStep>('upload')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string>('')
@@ -176,7 +237,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
         followedRules: currentStrategy.rules || []
       }))
     }
-  }, [currentStrategy])
+  }, [currentStrategy?.id]) // Add dependency to prevent infinite loop
 
   const handleImageUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -188,45 +249,49 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
     }
   }, [])
 
-  const handleProcessImage = async () => {
-    if (!selectedImage) return
+const handleProcessImage = async () => {
+  if (!selectedImage) return
+  
+  setIsProcessing(true)
+  setCurrentStep('processing')
+  
+  try {
+    const analysis = await analyzeImageWithDeepSeek(
+      selectedImage, 
+      currentStrategy,
+      analyzeTradeImageAction
+    )
+    setAiAnalysis(analysis)
     
-    setIsProcessing(true)
-    setCurrentStep('processing')
+    // Update trade data with AI analysis
+    setTradeData(prev => ({
+      ...prev,
+      symbol: analysis.symbol || prev.symbol,
+      type: analysis.type || prev.type,
+      riskReward: analysis.riskReward || prev.riskReward,
+      timeframe: analysis.timeframe || prev.timeframe,
+      notes: analysis.reasoning || prev.notes,
+      selectedComponents: analysis.strategyMatch?.matchedComponents || prev.selectedComponents,
+      followedRules: analysis.strategyMatch?.suggestedRules || prev.followedRules
+    }))
     
-    try {
-      const analysis = await analyzeImageWithDeepSeek(selectedImage, currentStrategy)
-      setAiAnalysis(analysis)
-      
-      // Update trade data with AI analysis (with null checks)
-      setTradeData(prev => ({
-        ...prev,
-        symbol: analysis.symbol || prev.symbol,
-        type: analysis.type || prev.type,
-        riskReward: analysis.riskReward || prev.riskReward,
-        timeframe: analysis.timeframe || prev.timeframe,
-        notes: analysis.reasoning,
-        selectedComponents: analysis.strategyMatch?.matchedComponents || prev.selectedComponents,
-        followedRules: analysis.strategyMatch?.suggestedRules || prev.followedRules
-      }))
-      
-      // Mark fields that need user input
-      const fieldsToEdit = new Set<string>()
-      if (!analysis.extractedData.hasSymbol) fieldsToEdit.add('symbol')
-      if (!analysis.extractedData.hasRiskReward) fieldsToEdit.add('riskReward')
-      if (!analysis.extractedData.hasTimeframe) fieldsToEdit.add('timeframe')
-      if (!analysis.extractedData.hasDirection) fieldsToEdit.add('type')
-      setEditableFields(fieldsToEdit)
-      
-      setCurrentStep('review')
-    } catch (error) {
-      console.error('Failed to analyze image:', error)
-      toast.error('Failed to analyze image. Please try again.')
-      setCurrentStep('upload')
-    } finally {
-      setIsProcessing(false)
-    }
+    // Mark fields that need user input
+    const fieldsToEdit = new Set<string>()
+    if (!analysis.extractedData.hasSymbol) fieldsToEdit.add('symbol')
+    if (!analysis.extractedData.hasRiskReward) fieldsToEdit.add('riskReward')
+    if (!analysis.extractedData.hasTimeframe) fieldsToEdit.add('timeframe')
+    if (!analysis.extractedData.hasDirection) fieldsToEdit.add('type')
+    setEditableFields(fieldsToEdit)
+    
+    setCurrentStep('review')
+  } catch (error) {
+    console.error('Failed to analyze image:', error)
+    toast.error('Failed to analyze image. Please try again.')
+    setCurrentStep('upload')
+  } finally {
+    setIsProcessing(false)
   }
+}
 
   const handleSubmitTrade = async () => {
     if (!currentStrategy) {
@@ -531,7 +596,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <h1 className="text-xl font-semibold text-white">Add New Trade (RR-Focused)</h1>
+          <h1 className="text-xl font-semibold text-white">Add New Trade</h1>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -548,3 +613,4 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
     document.body
   )
 }
+

@@ -1,14 +1,32 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 
-interface DeepSeekResponse {
-  choices: Array<{
-    message: {
-      content: string;
-    };
-  }>;
+// API Response Types
+interface DeepSeekMessage {
+  role: string;
+  content: string;
 }
 
+interface DeepSeekChoice {
+  index: number;
+  message: DeepSeekMessage;
+  finish_reason: string;
+}
+
+interface DeepSeekResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: DeepSeekChoice[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+// Strategy Types
 interface DetailedStrategyComponent {
   id: string;
   type: 'entry' | 'exit' | 'risk_management' | 'position_sizing' | 'market_condition' | 'level_marking' | 'confirmation';
@@ -36,10 +54,87 @@ interface ParsedAdvancedStrategy {
   riskProfile: 'conservative' | 'moderate' | 'aggressive';
 }
 
-// Replace with:
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+interface TradeAnalysis {
+  symbol: string | null;
+  type: 'LONG' | 'SHORT' | null;
+  riskReward: number | null;
+  confidence: number;
+  reasoning: string;
+  timeframe: string | null;
+  extractedData: {
+    hasSymbol: boolean;
+    hasRiskReward: boolean;
+    hasTimeframe: boolean;
+    hasDirection: boolean;
+  };
+  strategyMatch?: {
+    matchedComponents: string[];
+    suggestedRules: string[];
+    matchConfidence: number;
+  };
+}
 
+// Type Guards and Utilities
+function isDeepSeekResponse(data: unknown): data is DeepSeekResponse {
+  if (!data || typeof data !== 'object') return false;
+  
+  const response = data as DeepSeekResponse;
+  return Array.isArray(response.choices) &&
+         response.choices.length > 0 &&
+         typeof response.choices[0]?.message?.content === 'string';
+}
+
+function generateStrategyPrompt(description: string): string {
+  return `
+Analyze this trading strategy description and extract detailed structured information:
+
+"${description}"
+
+Provide a detailed analysis with the following components:
+
+1. Entry Rules
+2. Exit Rules
+3. Risk Management
+4. Position Sizing
+5. Market Conditions
+6. Technical Indicators
+7. Time Frames
+8. Confirmation Signals
+
+Format the response as a JSON object with the following structure:
+{
+  "components": [
+    {
+      "id": "unique-id",
+      "type": "component-type",
+      "name": "component-name",
+      "description": "detailed-description",
+      "indicators": [
+        {
+          "name": "indicator-name",
+          "condition": "condition-description",
+          "value": "value-setting",
+          "timeframe": "timeframe-setting"
+        }
+      ],
+      "patterns": ["pattern1", "pattern2"],
+      "confidence": 0.95,
+      "priority": "high/medium/low",
+      "tags": ["tag1", "tag2"],
+      "timeframes": ["timeframe1", "timeframe2"],
+      "conditions": ["condition1", "condition2"]
+    }
+  ],
+  "globalTags": ["tag1", "tag2"],
+  "suggestedName": "strategy-name",
+  "complexity": "simple/intermediate/advanced",
+  "riskProfile": "conservative/moderate/aggressive"
+}
+
+Respond only with valid JSON, no additional text.`;
+}
+
+// Main Actions
 export const parseStrategy = action({
   args: {
     description: v.string(),
@@ -47,129 +142,15 @@ export const parseStrategy = action({
     enhancedParsing: v.optional(v.boolean()),
   },
   handler: async (ctx, { description, complexity = 'basic', enhancedParsing = false }): Promise<ParsedAdvancedStrategy> => {
-    // Get the API key from Convex environment
     const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
     
     if (!DEEPSEEK_API_KEY) {
       console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
       throw new Error('DEEPSEEK_API_KEY not configured');
     }
-    
-    const isAdvanced = complexity === 'advanced' || enhancedParsing;
-    
-    console.log('🔥 DeepSeek API Call Started');
-    console.log('📝 Input description length:', description.length);
-    console.log('⚙️ Complexity:', complexity);
-    console.log('🚀 Enhanced parsing:', enhancedParsing);
-    console.log('🎯 Is advanced:', isAdvanced);
-    
-    const enhancedPrompt = `
-Analyze this trading strategy description and extract detailed structured information with enhanced component recognition:
 
-"${description}"
-
-For ENHANCED ADVANCED analysis, break down the strategy into detailed components with special attention to:
-
-1. **Multi-timeframe strategies** (Monthly, Weekly, Daily, 4h, 1h)
-2. **Level marking systems** (OCL, STFL, TTFL, key levels)
-3. **Entry construction models** (14B, D1W4, confirmation entries)
-4. **Risk management protocols** (position sizing, stop loss rules)
-5. **Session-based trading** (London, New York, Asian sessions)
-6. **Market condition filters** (trending, ranging, volatile)
-
-Component types to recognize:
-- 'entry': Entry signals and conditions
-- 'exit': Exit strategies and profit targets
-- 'risk_management': Stop loss and risk rules
-- 'position_sizing': Position size calculations
-- 'market_condition': Market filters and conditions
-- 'level_marking': Key level identification (OCL, STFL, TTFL)
-- 'confirmation': Confirmation patterns and signals
-
-For each component, provide:
-- id: unique identifier
-- type: component type from above
-- name: Short descriptive name (e.g., "Mark Key Levels", "OCL Identification")
-- description: detailed description
-- tags: Comprehensive tags including:
-  * Component-specific tags (e.g., "OCL", "STFL", "TTFL" for level marking)
-  * Timeframe tags (e.g., "timeframe:monthly", "timeframe:1h")
-  * Condition tags (e.g., "condition:breakout", "condition:rejection")
-  * Signal tags (e.g., "signal:bullish", "signal:bearish")
-- indicators: Technical indicators with conditions
-- timeframes: Relevant timeframes for this component
-- conditions: Specific conditions or rules
-- confidence: 0-1 score
-- priority: 'high' | 'medium' | 'low'
-
-Global tags should include:
-- "strategy-type:multi-timeframe/breakout/reversal/scalping"
-- "complexity:simple/intermediate/advanced"
-- "session:london/new-york/asian"
-- "automation:manual/semi-auto/fully-auto"
-- "risk-level:low/medium/high"
-- "timeframe-analysis:single/multi"
-- "level-system:ocl-stfl-ttfl/support-resistance/fibonacci"
-
-Example enhanced response for multi-timeframe strategy:
-{
-  "components": [
-    {
-      "id": "storyline-1",
-      "type": "market_condition",
-      "name": "Identify Storyline (Trend Bias)",
-      "description": "Determine market bias using Monthly rejection + Weekly breakout patterns",
-      "tags": [
-        "storyline", "trend-bias", "monthly-rejection", "weekly-breakout",
-        "timeframe:monthly", "timeframe:weekly", "bias:bullish", "bias:bearish"
-      ],
-      "timeframes": ["Monthly", "Weekly"],
-      "conditions": [
-        "Monthly rejection + Weekly breakout = Monthly turns bearish",
-        "Monthly rejection + Weekly breakout = Monthly turns bullish"
-      ],
-      "confidence": 0.9,
-      "priority": "high"
-    },
-    {
-      "id": "levels-1",
-      "type": "level_marking",
-      "name": "Mark Key Levels",
-      "description": "Identify and mark OCL, STFL, and TTFL levels for entry construction",
-      "tags": [
-        "OCL", "STFL", "TTFL", "key-levels", "origin-candle",
-        "second-timeframe-level", "third-timeframe-level", "level-marking"
-      ],
-      "conditions": [
-        "OCL - Origin Candle Level (rejection candle + adjacent wick)",
-        "STFL - Second Timeframe Level (key level inside OCL; must be fresh)",
-        "TTFL - Third Timeframe Level (refinement inside STFL)"
-      ],
-      "confidence": 0.95,
-      "priority": "high"
-    }
-  ],
-  "globalTags": [
-    "strategy-type:multi-timeframe",
-    "complexity:advanced",
-    "level-system:ocl-stfl-ttfl",
-    "timeframe-analysis:multi",
-    "automation:manual",
-    "risk-level:medium"
-  ],
-  "suggestedName": "Multi-Timeframe OCL/STFL/TTFL Strategy",
-  "complexity": "advanced",
-  "riskProfile": "moderate",
-  "sessionTimes": ["london", "new-york"],
-  "marketConditions": ["trending", "breakout"],
-  "automationLevel": "manual"
-}
-
-Respond only with valid JSON, no additional text.`;
-
-    console.log('📤 Sending request to DeepSeek API...');
-    console.log('🔗 API URL:', DEEPSEEK_API_URL);
-    console.log('🔑 API Key present:', !!DEEPSEEK_API_KEY);
+    console.log('🔥 Starting strategy analysis');
     
     try {
       const requestBody = {
@@ -177,15 +158,13 @@ Respond only with valid JSON, no additional text.`;
         messages: [
           {
             role: 'user',
-            content: enhancedPrompt
+            content: generateStrategyPrompt(description)
           }
         ],
         temperature: 0.1,
-        max_tokens: isAdvanced ? 4000 : 2000
+        max_tokens: enhancedParsing ? 4000 : 2000
       };
-      
-      console.log('📋 Request body:', JSON.stringify(requestBody, null, 2));
-      
+
       const response = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
         headers: {
@@ -195,96 +174,214 @@ Respond only with valid JSON, no additional text.`;
         body: JSON.stringify(requestBody)
       });
 
-      console.log('📥 Response status:', response.status);
-      console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ DeepSeek API error response:', errorText);
+        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
+      }
+
+      const rawData: unknown = await response.json();
+      
+      if (!isDeepSeekResponse(rawData)) {
+        throw new Error('Invalid response format from DeepSeek API');
+      }
+
+      const data: DeepSeekResponse = rawData;
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content received from DeepSeek API');
+      }
+
+      // Clean and parse the content
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```json')) {
+        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+      }
+
+      const parsedStrategy = JSON.parse(cleanContent) as ParsedAdvancedStrategy;
+
+      return {
+        components: parsedStrategy.components || [],
+        globalTags: parsedStrategy.globalTags || [],
+        suggestedName: parsedStrategy.suggestedName || 'Custom Strategy',
+        complexity: parsedStrategy.complexity || 'intermediate',
+        riskProfile: parsedStrategy.riskProfile || 'moderate'
+      };
+
+    } catch (error) {
+      console.error('💥 Strategy parsing error:', error);
+      
+      return {
+        components: [{
+          id: 'fallback-1',
+          type: 'entry',
+          name: 'Basic Entry Rule',
+          description: 'Default entry rule due to parsing error',
+          confidence: 0.5,
+          priority: 'medium',
+          tags: ['fallback', 'basic']
+        }],
+        globalTags: ['fallback'],
+        suggestedName: 'Basic Strategy',
+        complexity: 'simple',
+        riskProfile: 'conservative'
+      };
+    }
+  },
+});
+
+export const analyzeTradeImage = action({
+  args: {
+    imageBase64: v.string(),
+    prompt: v.string(),
+  },
+  handler: async (ctx, { imageBase64, prompt }): Promise<TradeAnalysis> => {
+    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+
+    if (!DEEPSEEK_API_KEY) {
+      console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
+      throw new Error('DEEPSEEK_API_KEY not configured');
+    }
+
+    console.log('🔥 Starting trade image analysis');
+
+    try {
+      const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+      
+      // Updated prompt to focus on specific details
+const specificPrompt = `You are a trading chart analyst. 
+Looking at this trading chart, please examine the top left corner and header area for the trading pair and timeframe information.
+
+The chart appears to be from TradingView platform. Please provide:
+
+1. Trading Symbol/Pair: Look at the top left corner for the currency pair (e.g., GBPUSD, EURUSD)
+2. Timeframe: Look for timeframe indicators (1m, 5m, 15m, 1h, 4h, 1D, etc.)
+3. Current Market Direction: Based on recent price action, is this a potential LONG or SHORT setup?
+4. Risk/Reward Setup: If you can see any clear support/resistance levels, what's the potential risk/reward ratio?
+
+Please respond in this exact JSON format:
+{
+  "symbol": "the trading pair from the top left",
+  "timeframe": "the chart timeframe shown",
+  "type": "LONG or SHORT",
+  "riskReward": number or null if unclear,
+  "confidence": number between 0 and 1,
+  "reasoning": "brief explanation of your analysis"
+}`;
+
+const requestBody = {
+  model: 'deepseek-chat',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are a professional trading chart analyst. Pay special attention to text in the top left corner of TradingView charts, which always shows the trading pair and timeframe.'
+    },
+    {
+      role: 'user',
+      content: `This is a TradingView chart. The trading pair and timeframe are shown in the top left corner.
+
+<image>${cleanBase64}</image>
+
+${specificPrompt}`
+    }
+  ],
+  temperature: 0.3,
+  max_tokens: 1000
+};
+
+      console.log('📦 Request structure:', {
+        model: requestBody.model,
+        messageCount: requestBody.messages.length,
+        temperature: requestBody.temperature,
+        max_tokens: requestBody.max_tokens,
+        promptLength: specificPrompt.length
+      });
+
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody)
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ DeepSeek API error response:', errorText);
-        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText} - ${errorText}`);
+        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json() as DeepSeekResponse;
-      console.log('📦 Raw DeepSeek response:', JSON.stringify(data, null, 2));
+      const rawData: unknown = await response.json();
+      console.log('📥 Raw API response:', rawData);
       
+      if (!isDeepSeekResponse(rawData)) {
+        throw new Error('Invalid response format from DeepSeek API');
+      }
+
+      const data: DeepSeekResponse = rawData;
       const content = data.choices[0]?.message?.content;
-      console.log('📄 Content from DeepSeek:', content);
-      
+
       if (!content) {
-        console.error('❌ No content received from DeepSeek API');
         throw new Error('No content received from DeepSeek API');
       }
 
-      console.log('🔍 Attempting to parse JSON content...');
-      
-      // Strip markdown code blocks if present
-      let cleanContent = content.trim();
-      if (cleanContent.startsWith('```json')) {
-        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        console.log('🧹 Stripped markdown wrapper from content');
-      }
-      
-      const parsed = JSON.parse(cleanContent);
-      console.log('✅ Successfully parsed JSON:', JSON.stringify(parsed, null, 2));
-      
-      if (isAdvanced) {
-        const result = {
-          components: parsed.components || [],
-          globalTags: parsed.globalTags || [],
-          suggestedName: parsed.suggestedName || 'Advanced Strategy',
-          complexity: parsed.complexity || 'intermediate',
-          riskProfile: parsed.riskProfile || 'moderate'
-        };
-        console.log('🎯 Returning advanced result:', JSON.stringify(result, null, 2));
-        return result;
-      } else {
-        // Convert basic format to advanced format for compatibility
-        const components = (parsed.structuredRules || []).map((rule: any, index: number) => ({
-          id: `component-${index + 1}`,
-          type: 'entry' as const,
-          name: rule.pattern || rule.context || 'Trading rule',
-          description: rule.pattern || rule.context || 'Trading rule',
-          confidence: rule.confidence || 0.7,
-          priority: 'medium' as const,
-          tags: [`rule-${index + 1}`, ...(rule.tags || [])]
-        }));
+      console.log('✨ Raw content:', content);
+
+      // Try to extract JSON from the response
+      try {
+        // Find JSON object in the response
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          throw new Error('No JSON found in response');
+        }
+
+        const parsedContent = JSON.parse(jsonMatch[0]) as TradeAnalysis;
         
-        const result = {
-          components,
-          globalTags: parsed.tags || [],
-          suggestedName: parsed.suggestedName || 'Custom Strategy',
-          complexity: 'simple' as const,
-          riskProfile: 'moderate' as const
+        // Validate and clean up the response
+        return {
+          symbol: parsedContent.symbol || null,
+          type: (parsedContent.type === 'LONG' || parsedContent.type === 'SHORT') ? parsedContent.type : null,
+          riskReward: typeof parsedContent.riskReward === 'number' ? parsedContent.riskReward : null,
+          confidence: typeof parsedContent.confidence === 'number' ? 
+            Math.max(0, Math.min(1, parsedContent.confidence)) : 0.5,
+          reasoning: parsedContent.reasoning || 'No explanation provided',
+          timeframe: parsedContent.timeframe || null,
+          extractedData: {
+            hasSymbol: Boolean(parsedContent.symbol),
+            hasRiskReward: Boolean(parsedContent.riskReward),
+            hasTimeframe: Boolean(parsedContent.timeframe),
+            hasDirection: Boolean(parsedContent.type)
+          }
         };
-        console.log('🎯 Returning basic result:', JSON.stringify(result, null, 2));
-        return result;
+      } catch (parseError) {
+        console.error('💥 Error parsing JSON from response:', parseError);
+        throw new Error('Failed to parse structured response');
       }
+
+    } catch (error: unknown) {
+      console.error('💥 Trade analysis error:', error);
       
-    } catch (error) {
-      console.error('💥 Error in DeepSeek API call:', error);
-      console.error('🔍 Error type:', typeof error);
-      console.error('🔍 Error message:', error instanceof Error ? error.message : 'Unknown error');
-      console.error('🔍 Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      
-      // Enhanced fallback
-      const fallbackResult = {
-        components: [{
-          id: 'fallback-1',
-          type: 'entry' as const,
-          name: 'Manual strategy component',
-          description: 'Manual strategy component',
-          confidence: 0.5,
-          priority: 'medium' as const,
-          tags: ['manual', 'fallback']
-        }],
-        globalTags: ['strategy-type:manual', 'source:fallback'],
-        suggestedName: 'Custom Strategy',
-        complexity: 'simple' as const,
-        riskProfile: 'moderate' as const
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unknown error occurred';
+
+      return {
+        symbol: null,
+        type: null,
+        riskReward: null,
+        confidence: 0.3,
+        reasoning: `Analysis failed - ${errorMessage}`,
+        timeframe: null,
+        extractedData: {
+          hasSymbol: false,
+          hasRiskReward: false,
+          hasTimeframe: false,
+          hasDirection: false
+        }
       };
-      
-      console.log('🆘 Returning fallback result:', JSON.stringify(fallbackResult, null, 2));
-      return fallbackResult;
     }
   },
 });
