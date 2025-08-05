@@ -26,6 +26,46 @@ interface DeepSeekResponse {
   };
 }
 
+// Mistral API Response Types
+interface MistralMessage {
+  role: string;
+  content: string | Array<{
+    type: string;
+    text?: string;
+    image_url?: {
+      url: string;
+    };
+  }>;
+}
+
+interface MistralChoice {
+  index: number;
+  message: MistralMessage;
+  finish_reason: string;
+}
+
+interface MistralResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: MistralChoice[];
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+}
+
+function isMistralResponse(data: unknown): data is MistralResponse {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'choices' in data &&
+    Array.isArray((data as any).choices)
+  );
+}
+
 // Strategy Types
 interface DetailedStrategyComponent {
   id: string;
@@ -383,6 +423,223 @@ ${specificPrompt}`
           hasDirection: false
         }
       };
+    }
+  },
+});
+
+// Add this new action after the parseStrategy action (around line 232)
+
+export const testMistralOCR = action({
+  args: {
+    imageBase64: v.string(),
+  },
+  handler: async (ctx, { imageBase64 }): Promise<{ extractedText: string; rawResponse: string }> => {
+    const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+    const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+
+    if (!MISTRAL_API_KEY) {
+      console.error('❌ MISTRAL_API_KEY not found in environment variables');
+      throw new Error('MISTRAL_API_KEY not configured');
+    }
+
+    console.log('🔍 Testing Mistral OCR extraction');
+
+    try {
+      const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+      
+      const requestBody = {
+        model: 'pixtral-12b-2409',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Please extract ALL visible text from this trading chart image. Focus especially on:\n\n1. Trading pair/symbol (usually in top left corner)\n2. Timeframe information\n3. Price levels and numbers\n4. Any indicators or labels\n5. Menu items or interface text\n\nProvide the extracted text in a clear, organized format. Be thorough and include everything you can read.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${cleanBase64}`
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000
+      };
+
+      console.log('📦 Mistral request structure:', {
+        model: requestBody.model,
+        messageCount: requestBody.messages.length,
+        temperature: requestBody.temperature,
+        max_tokens: requestBody.max_tokens
+      });
+
+      const response = await fetch(MISTRAL_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Mistral API error response:', errorText);
+        throw new Error(`Mistral API error: ${response.status} ${response.statusText}`);
+      }
+
+      const rawData: unknown = await response.json();
+      console.log('📥 Raw Mistral API response:', rawData);
+      
+      if (!isMistralResponse(rawData)) {
+        throw new Error('Invalid response format from Mistral API');
+      }
+
+      const data: MistralResponse = rawData;
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content received from Mistral API');
+      }
+
+      const extractedText = typeof content === 'string' ? content : JSON.stringify(content);
+      
+      console.log('✨ Extracted text from Mistral:', extractedText);
+
+      return {
+        extractedText,
+        rawResponse: JSON.stringify(rawData, null, 2)
+      };
+
+    } catch (error: unknown) {
+      console.error('💥 Mistral OCR error:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unknown error occurred';
+
+      throw new Error(`Mistral OCR failed: ${errorMessage}`);
+    }
+  },
+});
+
+export const analyzeOCRText = action({
+  args: {
+    extractedText: v.string(),
+    prompt: v.string(),
+  },
+  handler: async (ctx, { extractedText, prompt }): Promise<TradeAnalysis> => {
+    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+    const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+
+    if (!DEEPSEEK_API_KEY) {
+      console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
+      throw new Error('DEEPSEEK_API_KEY not configured');
+    }
+
+    console.log('🔍 Analyzing OCR text with DeepSeek');
+    console.log('📝 Extracted text to analyze:', extractedText);
+
+    try {
+      const requestBody = {
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'user',
+            content: `${prompt}\n\nExtracted text from trading chart:\n${extractedText}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 1500
+      };
+
+      console.log('📦 DeepSeek request structure:', {
+        model: requestBody.model,
+        messageCount: requestBody.messages.length,
+        temperature: requestBody.temperature,
+        max_tokens: requestBody.max_tokens
+      });
+
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ DeepSeek API error response:', errorText);
+        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
+      }
+
+      const rawData: unknown = await response.json();
+      console.log('📥 Raw DeepSeek API response:', rawData);
+      
+      if (!isDeepSeekResponse(rawData)) {
+        throw new Error('Invalid response format from DeepSeek API');
+      }
+
+      const data: DeepSeekResponse = rawData;
+      const content = data.choices[0]?.message?.content;
+
+      if (!content) {
+        throw new Error('No content received from DeepSeek API');
+      }
+
+      console.log('✨ DeepSeek analysis result:', content);
+
+      try {
+        const analysisResult = JSON.parse(content);
+        
+        return {
+          symbol: analysisResult.symbol || null,
+          type: analysisResult.type || null,
+          riskReward: analysisResult.riskReward || null,
+          confidence: analysisResult.confidence || 0,
+          reasoning: analysisResult.reasoning || 'No reasoning provided',
+          timeframe: analysisResult.timeframe || null,
+          extractedData: {
+            hasSymbol: Boolean(analysisResult.symbol),
+            hasRiskReward: Boolean(analysisResult.riskReward),
+            hasTimeframe: Boolean(analysisResult.timeframe),
+            hasDirection: Boolean(analysisResult.type)
+          },
+          strategyMatch: analysisResult.strategyMatch
+        };
+      } catch (parseError) {
+        console.error('❌ Failed to parse DeepSeek response as JSON:', parseError);
+        console.log('📄 Raw content:', content);
+        
+        return {
+          symbol: null,
+          type: null,
+          riskReward: null,
+          confidence: 0,
+          reasoning: `Analysis failed to parse: ${content}`,
+          timeframe: null,
+          extractedData: {
+            hasSymbol: false,
+            hasRiskReward: false,
+            hasTimeframe: false,
+            hasDirection: false
+          }
+        };
+      }
+    } catch (error: unknown) {
+      console.error('💥 DeepSeek analysis error:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unknown error occurred';
+
+      throw new Error(`DeepSeek analysis failed: ${errorMessage}`);
     }
   },
 });

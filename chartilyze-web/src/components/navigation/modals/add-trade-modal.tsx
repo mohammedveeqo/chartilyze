@@ -127,10 +127,11 @@ const COMMON_RR_RATIOS = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
 const analyzeImageWithDeepSeek = async (
   imageFile: File,
   currentStrategy: any,
-  analyzeTradeImageAction: any
+  analyzeTradeImageAction: any,
+  testMistralOCRAction: any
 ): Promise<AIAnalysisResult> => {
   try {
-    console.log('🔍 Starting image analysis with DeepSeek...');
+    console.log('🔍 Starting image analysis with Mistral OCR + DeepSeek...');
     
     // Convert image to base64
     const base64 = await new Promise<string>((resolve, reject) => {
@@ -150,32 +151,45 @@ const analyzeImageWithDeepSeek = async (
       reader.readAsDataURL(imageFile);
     });
 
-    // Enhanced prompt for better trade analysis
+    // Step 1: Extract text using Mistral OCR
+    const ocrResult = await testMistralOCRAction({ 
+      imageBase64: base64
+    });
+    
+    console.log('🔍 Mistral OCR Result:', ocrResult);
+    console.log('📝 Extracted Text:', ocrResult.extractedText);
+    
+    // Step 2: Use extracted text to inform DeepSeek analysis
     const strategyContext = currentStrategy ? `
 Active Strategy: ${currentStrategy.name}
 Strategy Components: ${currentStrategy.components?.map((c: any) => c.name).join(', ') || 'None'}
 Strategy Rules: ${currentStrategy.rules?.join(', ') || 'None'}` : '';
     
-    const prompt = `Analyze this trading chart image and extract trade information. ${strategyContext}
+    const enhancedPrompt = `Based on the following extracted text from a trading chart, analyze and identify the trade information:
 
-Please identify:
-1. Trading symbol/pair
-2. Trade direction (LONG/SHORT)
-3. Risk/reward ratio
-4. Timeframe
+EXTRACTED TEXT FROM CHART:
+${ocrResult.extractedText}
+
+${strategyContext}
+
+Please identify from the extracted text:
+1. Trading symbol/pair (look for currency pairs like GBP/USD, EUR/USD, etc.)
+2. Trade direction (LONG/SHORT) 
+3. Risk/reward ratio (if mentioned)
+4. Timeframe (look for 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w, etc.)
 5. How this trade relates to the active strategy
 
 Respond in JSON format:
 {
   "symbol": "extracted symbol or null",
-  "type": "LONG or SHORT or null",
+  "type": "LONG or SHORT or null", 
   "riskReward": "number or null",
   "timeframe": "timeframe or null",
-  "confidence": 0.75,
-  "reasoning": "detailed analysis of what you see",
+  "confidence": 0.85,
+  "reasoning": "detailed analysis based on extracted text",
   "extractedData": {
     "hasSymbol": true/false,
-    "hasRiskReward": true/false,
+    "hasRiskReward": true/false, 
     "hasTimeframe": true/false,
     "hasDirection": true/false
   },
@@ -186,28 +200,47 @@ Respond in JSON format:
   }
 }`;
 
-    const result = await analyzeTradeImageAction({
+    // Step 3: Get DeepSeek analysis based on OCR text
+    const deepSeekResult = await analyzeTradeImageAction({
       imageBase64: base64,
-      prompt: prompt
+      prompt: enhancedPrompt
     });
+    
+    console.log('🤖 DeepSeek Result:', deepSeekResult);
+    
+    // Step 4: Combine results and create comprehensive notes
+    let combinedNotes = deepSeekResult.reasoning || '';
+    
+    // Add Mistral OCR data to notes
+    if (ocrResult.extractedText) {
+      combinedNotes += `\n\n--- Extracted Chart Data ---\n${ocrResult.extractedText}`;
+    }
+    
+    // Add strategy analysis to notes
+    if (currentStrategy && deepSeekResult.strategyMatch) {
+      combinedNotes += `\n\n--- Strategy Analysis ---\nStrategy: ${currentStrategy.name}`;
+      if (deepSeekResult.strategyMatch.matchedComponents?.length > 0) {
+        combinedNotes += `\nMatched Components: ${deepSeekResult.strategyMatch.matchedComponents.join(', ')}`;
+      }
+      if (deepSeekResult.strategyMatch.suggestedRules?.length > 0) {
+        combinedNotes += `\nRelevant Rules: ${deepSeekResult.strategyMatch.suggestedRules.join(', ')}`;
+      }
+    }
 
-    console.log('✅ DeepSeek response:', result);
-
-    // Actually use the DeepSeek response data!
     return {
-      symbol: result.symbol,
-      type: result.type,
-      riskReward: result.riskReward,
-      confidence: result.confidence || 0.75,
-      reasoning: result.reasoning || 'No analysis received',
-      timeframe: result.timeframe,
+      symbol: deepSeekResult.symbol,
+      type: deepSeekResult.type,
+      riskReward: deepSeekResult.riskReward,
+      confidence: deepSeekResult.confidence || 0.85,
+      reasoning: combinedNotes,
+      timeframe: deepSeekResult.timeframe,
       extractedData: {
-        hasSymbol: !!result.symbol,
-        hasRiskReward: !!result.riskReward,
-        hasTimeframe: !!result.timeframe,
-        hasDirection: !!result.type
+        hasSymbol: !!deepSeekResult.symbol,
+        hasRiskReward: !!deepSeekResult.riskReward,
+        hasTimeframe: !!deepSeekResult.timeframe,
+        hasDirection: !!deepSeekResult.type
       },
-      strategyMatch: result.strategyMatch
+      strategyMatch: deepSeekResult.strategyMatch
     };
   } catch (error) {
     console.error('❌ Error in image analysis:', error);
@@ -229,8 +262,9 @@ Respond in JSON format:
 };
 
 export function AddTradeModal({ onClose }: AddTradeModalProps) {
-  // Add this line near the top of the component
+  // Add both action imports
   const analyzeTradeImageAction = useAction(api.aiStrategy.analyzeTradeImage);
+  const testMistralOCRAction = useAction(api.aiStrategy.testMistralOCR);
   
   const [currentStep, setCurrentStep] = useState<ModalStep>('upload')
   const [selectedImage, setSelectedImage] = useState<File | null>(null)
@@ -272,11 +306,13 @@ const handleProcessImage = async () => {
   setCurrentStep('processing')
   
   try {
+    // Wherever you call analyzeImageWithDeepSeek, update it to:
     const analysis = await analyzeImageWithDeepSeek(
-      selectedImage, 
+      selectedImage,
       currentStrategy,
-      analyzeTradeImageAction
-    )
+      analyzeTradeImageAction,
+      testMistralOCRAction  // Add this parameter
+    );
     setAiAnalysis(analysis)
     
     // Update trade data with AI analysis
@@ -608,25 +644,24 @@ const handleProcessImage = async () => {
     }
   }
 
-  return createPortal(
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-gray-700">
-          <h1 className="text-xl font-semibold text-white">Add New Trade</h1>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-        
-        <div className="p-6">
-          {renderCurrentStep()}
-        </div>
+return createPortal(
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-2xl my-4"> {/* Added my-4 for vertical spacing */}
+      <div className="flex items-center justify-between p-6 border-b border-gray-700">
+        <h1 className="text-xl font-semibold text-white">Add New Trade</h1>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-white transition-colors"
+        >
+          <X className="h-6 w-6" />
+        </button>
       </div>
-    </div>,
-    document.body
-  )
+      
+      <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]"> {/* Adjusted max-height */}
+        {renderCurrentStep()}
+      </div>
+    </div>
+  </div>,
+  document.body
+)
 }
-
