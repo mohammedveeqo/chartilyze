@@ -645,8 +645,9 @@ const handleProcessImage = async () => {
   }
 
 return createPortal(
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-    <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-2xl my-4"> {/* Added my-4 for vertical spacing */}
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-2xl max-h-[90vh] my-8"> {/* Added my-8 and max-h-[90vh] */}
+      {/* Header - fixed */}
       <div className="flex items-center justify-between p-6 border-b border-gray-700">
         <h1 className="text-xl font-semibold text-white">Add New Trade</h1>
         <button
@@ -657,7 +658,8 @@ return createPortal(
         </button>
       </div>
       
-      <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]"> {/* Adjusted max-height */}
+      {/* Content - scrollable */}
+      <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 200px)' }}> {/* Adjusted for header height + margins */}
         {renderCurrentStep()}
       </div>
     </div>
