@@ -290,117 +290,165 @@ export const analyzeTradeImage = action({
     try {
       const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
       
-      // Updated prompt to focus on specific details
-const specificPrompt = `You are a trading chart analyst. 
-Looking at this trading chart, please examine the top left corner and header area for the trading pair and timeframe information.
+      // First, let's have DeepSeek identify the symbol and timeframe from OCR data
+      const initialPrompt = `
+From this OCR text of a trading chart, identify the symbol and timeframe:
 
-The chart appears to be from TradingView platform. Please provide:
+${prompt}
 
-1. Trading Symbol/Pair: Look at the top left corner for the currency pair (e.g., GBPUSD, EURUSD)
-2. Timeframe: Look for timeframe indicators (1m, 5m, 15m, 1h, 4h, 1D, etc.)
-3. Current Market Direction: Based on recent price action, is this a potential LONG or SHORT setup?
-4. Risk/Reward Setup: If you can see any clear support/resistance levels, what's the potential risk/reward ratio?
-
-Please respond in this exact JSON format:
+Focus on the "Top Left Corner" section which contains the trading pair and timeframe information.
+Return only a JSON response in this format:
 {
-  "symbol": "the trading pair from the top left",
-  "timeframe": "the chart timeframe shown",
-  "type": "LONG or SHORT",
-  "riskReward": number or null if unclear,
-  "confidence": number between 0 and 1,
-  "reasoning": "brief explanation of your analysis"
+  "symbol": "the trading pair (e.g., GBP/USD)",
+  "timeframe": "the timeframe (e.g., 1D, 1H)",
+  "confidence": number between 0 and 1
 }`;
 
-const requestBody = {
-  model: 'deepseek-chat',
-  messages: [
-    {
-      role: 'system',
-      content: 'You are a professional trading chart analyst. Pay special attention to text in the top left corner of TradingView charts, which always shows the trading pair and timeframe.'
-    },
-    {
-      role: 'user',
-      content: `This is a TradingView chart. The trading pair and timeframe are shown in the top left corner.
+      const initialRequestBody = {
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a trading chart analyzer. Extract the symbol and timeframe from the OCR data.'
+          },
+          {
+            role: 'user',
+            content: initialPrompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 500
+      };
 
-<image>${cleanBase64}</image>
-
-${specificPrompt}`
-    }
-  ],
-  temperature: 0.3,
-  max_tokens: 1000
-};
-
-      console.log('📦 Request structure:', {
-        model: requestBody.model,
-        messageCount: requestBody.messages.length,
-        temperature: requestBody.temperature,
-        max_tokens: requestBody.max_tokens,
-        promptLength: specificPrompt.length
-      });
-
-      const response = await fetch(DEEPSEEK_API_URL, {
+      // Get initial analysis for symbol and timeframe
+      const initialResponse = await fetch(DEEPSEEK_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(initialRequestBody)
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ DeepSeek API error response:', errorText);
-        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
+      if (!initialResponse.ok) {
+        throw new Error(`Initial DeepSeek API error: ${initialResponse.status}`);
       }
 
-      const rawData: unknown = await response.json();
-      console.log('📥 Raw API response:', rawData);
+      const initialData: unknown = await initialResponse.json();
       
-      if (!isDeepSeekResponse(rawData)) {
-        throw new Error('Invalid response format from DeepSeek API');
+      if (!isDeepSeekResponse(initialData)) {
+        throw new Error('Invalid response format from initial DeepSeek API call');
       }
 
-      const data: DeepSeekResponse = rawData;
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No content received from DeepSeek API');
+      const initialContent = initialData.choices[0]?.message?.content;
+      if (!initialContent) {
+        throw new Error('No content received from initial DeepSeek API call');
       }
 
-      console.log('✨ Raw content:', content);
+      interface ChartInfo {
+        symbol: string;
+        timeframe: string;
+        confidence: number;
+      }
 
-      // Try to extract JSON from the response
-      try {
-        // Clean and parse the content
-        let cleanContent = content.trim();
-        if (cleanContent.startsWith('```json')) {
-          cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        }
-  
-        const parsedResult = JSON.parse(cleanContent) as TradeAnalysis;
-        
-        // Ensure all required fields are present
-        return {
-          symbol: parsedResult.symbol || null,
-          type: parsedResult.type || null,
-          riskReward: parsedResult.riskReward || null,
-          confidence: parsedResult.confidence || 0.5,
-          reasoning: parsedResult.reasoning || 'Analysis completed',
-          timeframe: parsedResult.timeframe || null,
-          extractedData: {
-            hasSymbol: !!parsedResult.symbol,
-            hasRiskReward: !!parsedResult.riskReward,
-            hasTimeframe: !!parsedResult.timeframe,
-            hasDirection: !!parsedResult.type
+      const chartInfo = JSON.parse(initialContent) as ChartInfo;
+
+      console.log('📊 DeepSeek Chart Info:', chartInfo);
+
+      if (!chartInfo.symbol || !chartInfo.timeframe) {
+        throw new Error('Could not identify symbol or timeframe from chart');
+      }
+
+      // Now get the full analysis with the identified symbol and timeframe
+      const enhancedPrompt = `
+You are analyzing a ${chartInfo.symbol} chart on the ${chartInfo.timeframe} timeframe.
+
+Chart Information from OCR:
+${prompt}
+
+Strategy Context:
+${prompt.includes('Active Strategy:') ? prompt.split('Active Strategy:')[1] : 'No strategy provided'}
+
+Based on this specific ${chartInfo.symbol} ${chartInfo.timeframe} setup, provide a detailed analysis.
+
+Respond in this exact JSON format:
+{
+  "symbol": "${chartInfo.symbol}",
+  "timeframe": "${chartInfo.timeframe}",
+  "type": "LONG or SHORT based on the setup",
+  "riskReward": number or null,
+  "confidence": number between 0 and 1,
+  "reasoning": "detailed analysis of this specific setup",
+  "strategyMatch": {
+    "matchedComponents": ["list relevant strategy components that apply to this setup"],
+    "suggestedRules": ["list strategy rules that are applicable"],
+    "matchConfidence": number between 0 and 1
+  }
+}`;
+
+      const fullAnalysisRequestBody = {
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: `You are analyzing a ${chartInfo.symbol} ${chartInfo.timeframe} chart. Provide specific analysis for this setup.`
           },
-          strategyMatch: parsedResult.strategyMatch || undefined
-        };
-  
-      } catch (parseError) {
-        console.error('💥 JSON parsing failed:', parseError);
-        throw new Error('Failed to parse structured response');
+          {
+            role: 'user',
+            content: enhancedPrompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 1000
+      };
+
+      const fullAnalysisResponse = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        },
+        body: JSON.stringify(fullAnalysisRequestBody)
+      });
+
+      if (!fullAnalysisResponse.ok) {
+        throw new Error(`Full analysis DeepSeek API error: ${fullAnalysisResponse.status}`);
       }
+
+      const fullAnalysisData: unknown = await fullAnalysisResponse.json();
+      
+      if (!isDeepSeekResponse(fullAnalysisData)) {
+        throw new Error('Invalid response format from full analysis DeepSeek API call');
+      }
+
+      const fullAnalysisContent = fullAnalysisData.choices[0]?.message?.content;
+      if (!fullAnalysisContent) {
+        throw new Error('No content received from full analysis DeepSeek API call');
+      }
+
+      console.log('✨ Full Analysis:', fullAnalysisContent);
+
+      const parsedResult = JSON.parse(fullAnalysisContent);
+
+      return {
+        symbol: chartInfo.symbol,
+        type: parsedResult.type || null,
+        riskReward: parsedResult.riskReward || null,
+        confidence: chartInfo.confidence || 0.5,
+        reasoning: parsedResult.reasoning || 'Analysis completed',
+        timeframe: chartInfo.timeframe,
+        extractedData: {
+          hasSymbol: true,
+          hasRiskReward: !!parsedResult.riskReward,
+          hasTimeframe: true,
+          hasDirection: !!parsedResult.type
+        },
+        strategyMatch: {
+          matchedComponents: parsedResult.strategyMatch?.matchedComponents || [],
+          suggestedRules: parsedResult.strategyMatch?.suggestedRules || [],
+          matchConfidence: parsedResult.strategyMatch?.matchConfidence || 0.5
+        }
+      };
 
     } catch (error: unknown) {
       console.error('💥 Trade analysis error:', error);
