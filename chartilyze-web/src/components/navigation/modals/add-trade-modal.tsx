@@ -123,7 +123,7 @@ async function compressImage(base64String: string, maxSizeKB: number = 800): Pro
 const analyzeImageWithDeepSeek = async (
   imageFile: File,
   currentStrategy: any,
-  analyzeTradeImageAction: any,
+  analyzeOCRTextAction: any, // Changed from analyzeTradeImageAction
   testMistralOCRAction: any
 ): Promise<AIAnalysis> => {
   try {
@@ -152,95 +152,41 @@ const analyzeImageWithDeepSeek = async (
     
     console.log('🔍 OCR Extracted Text:', ocrResult.extractedText);
 
-    // Extract symbol and timeframe from OCR data
-    const symbolMatch = ocrResult.extractedText.match(/Trading Pair\/Symbol.*?([A-Z]{3}\/[A-Z]{3})/);
-    const timeframeMatch = ocrResult.extractedText.match(/Timeframe Information.*?(\d+[DHMWYmh])/i);
-
-    const extractedSymbol = symbolMatch ? symbolMatch[1] : null;
-    const extractedTimeframe = timeframeMatch ? timeframeMatch[1] : null;
-
-    console.log('📊 Extracted Chart Info:', {
-      symbol: extractedSymbol,
-      timeframe: extractedTimeframe
-    });
-
-    if (!extractedSymbol || !extractedTimeframe) {
-      throw new Error('Could not extract symbol or timeframe from chart');
-    }
-
-    // Create dynamic prompt based on current strategy and OCR data
-    const strategyContext = currentStrategy ? `
-Active Strategy: ${currentStrategy.name}
-Strategy Components: ${currentStrategy.components?.map((c: any) => c.name).join(', ') || 'None'}
-Strategy Rules: ${currentStrategy.rules?.join(', ') || 'None'}` : '';
+    // Create enhanced prompt for DeepSeek with strategy context
+    const strategyComponents = currentStrategy?.components?.map((c: any) => c.name).join(', ') || 'No strategy components';
+    const strategyRules = currentStrategy?.rules?.join(', ') || 'No strategy rules available';
     
-    const enhancedPrompt = `Based on the following extracted text from a trading chart:
+    const enhancedPrompt = `
+ACTIVE STRATEGY INFORMATION:
+Strategy Name: ${currentStrategy?.name || 'Unknown'}
+Components: ${strategyComponents}
+Rules: ${strategyRules}
 
-EXTRACTED TEXT:
-${ocrResult.extractedText}
+Please analyze how the OCR data from this trading chart relates to the active strategy above. Focus on:
+1. Does the chart setup match any strategy components?
+2. Are the strategy rules applicable to this setup?
+3. What is the recommended action based on the strategy?
+4. Extract symbol and timeframe from the OCR data.`;
 
-IMPORTANT - This is a ${extractedSymbol} chart on the ${extractedTimeframe} timeframe.
-
-${strategyContext}
-
-Please analyze how this specific ${extractedSymbol} ${extractedTimeframe} setup relates to the current strategy.
-Focus on:
-1. Which strategy components are relevant to this setup?
-2. Which strategy rules apply here?
-3. What actions are suggested based on the strategy?
-
-Respond in JSON format:
-{
-  "symbol": "${extractedSymbol}",
-  "timeframe": "${extractedTimeframe}",
-  "strategyMatch": {
-    "matchedComponents": ["list of relevant strategy components"],
-    "applicableRules": ["relevant rules from the strategy"],
-    "analysis": "how this setup fits the strategy",
-    "suggestions": ["suggested actions based on strategy rules"]
-  }
-}`;
-
-    // Get DeepSeek analysis
-    const deepSeekResult = await analyzeTradeImageAction({
-      imageBase64: base64,
+    // Get DeepSeek analysis using the new analyzeOCRText function
+    const deepSeekResult = await analyzeOCRTextAction({
+      extractedText: ocrResult.extractedText,
       prompt: enhancedPrompt
     });
 
     console.log('🤖 DeepSeek Analysis:', deepSeekResult);
 
-    // Ensure we use the correct symbol and timeframe from OCR
     return {
-      symbol: extractedSymbol,
-      timeframe: extractedTimeframe,
+      symbol: deepSeekResult.symbol,
+      timeframe: deepSeekResult.timeframe,
       confidence: deepSeekResult.confidence || 0.5,
-      reasoning: `
-Analysis based on ${extractedSymbol} ${extractedTimeframe} chart:
-${deepSeekResult.strategyMatch?.analysis || ''}
-
-Matched Components:
-${deepSeekResult.strategyMatch?.matchedComponents?.join(', ') || 'None'}
-
-Applicable Rules:
-${deepSeekResult.strategyMatch?.applicableRules?.join(', ') || 'None'}
-
-Suggestions:
-${deepSeekResult.strategyMatch?.suggestions?.join('\n') || 'None'}
-
-Raw Chart Data:
-${ocrResult.extractedText}
-      `,
+      reasoning: deepSeekResult.reasoning || 'Analysis completed',
       extractedData: {
-        hasSymbol: true,  // We got these from OCR
-        hasTimeframe: true,
-        hasDirection: !!deepSeekResult.strategyMatch?.suggestions?.length
+        hasSymbol: deepSeekResult.extractedData?.hasSymbol || false,
+        hasTimeframe: deepSeekResult.extractedData?.hasTimeframe || false,
+        hasDirection: deepSeekResult.extractedData?.hasDirection || false
       },
-      strategyMatch: {
-        matchedComponents: deepSeekResult.strategyMatch?.matchedComponents || [],
-        applicableRules: deepSeekResult.strategyMatch?.applicableRules || [],
-        analysis: deepSeekResult.strategyMatch?.analysis || '',
-        suggestions: deepSeekResult.strategyMatch?.suggestions || []
-      }
+      strategyMatch: deepSeekResult.strategyMatch
     };
 
   } catch (error) {
@@ -261,7 +207,7 @@ ${ocrResult.extractedText}
 
 // Main component
 export function AddTradeModal({ onClose }: AddTradeModalProps) {
-  const analyzeTradeImageAction = useAction(api.aiStrategy.analyzeTradeImage);
+  const analyzeOCRTextAction = useAction(api.aiStrategy.analyzeOCRText); // Changed
   const testMistralOCRAction = useAction(api.aiStrategy.testMistralOCR);
   
   const [currentStep, setCurrentStep] = useState<ModalStep>('upload')
@@ -307,7 +253,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
       const analysis = await analyzeImageWithDeepSeek(
         selectedImage,
         currentStrategy,
-        analyzeTradeImageAction,
+        analyzeOCRTextAction, // Changed
         testMistralOCRAction
       );
 
@@ -317,6 +263,7 @@ export function AddTradeModal({ onClose }: AddTradeModalProps) {
         ...prev,
         symbol: analysis.symbol || prev.symbol,
         timeframe: analysis.timeframe || prev.timeframe,
+        type: analysis.extractedData.hasDirection ? (analysis.reasoning.toLowerCase().includes('short') ? 'SHORT' : 'LONG') : prev.type,
         notes: analysis.reasoning || prev.notes,
         selectedComponents: analysis.strategyMatch?.matchedComponents || prev.selectedComponents,
         followedRules: analysis.strategyMatch?.applicableRules || prev.followedRules

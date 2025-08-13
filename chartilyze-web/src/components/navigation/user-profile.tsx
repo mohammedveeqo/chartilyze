@@ -22,9 +22,7 @@ export function UserProfile() {
               userButtonPopoverCard: "text-white"
             }
           }}
-        >
-          <Settings size={20} />
-        </UserButton>
+        />
       </div>
     </div>
   )

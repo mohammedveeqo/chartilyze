@@ -4,7 +4,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ConvexClientProvider } from './providers'
-
+import { ChatbotIcon } from '@/components/chatbot/chatbot-icon'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -35,11 +35,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning={true}>
       <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`}>
         <ClerkProvider>
           <ConvexClientProvider>
             {children}
+            <ChatbotIcon />
           </ConvexClientProvider>
         </ClerkProvider>
       </body>

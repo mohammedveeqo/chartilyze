@@ -428,7 +428,23 @@ Respond in this exact JSON format:
 
       console.log('✨ Full Analysis:', fullAnalysisContent);
 
-      const parsedResult = JSON.parse(fullAnalysisContent);
+      // Clean the response to remove markdown code blocks if present
+      let cleanedContent = fullAnalysisContent;
+      if (fullAnalysisContent.includes('```json')) {
+        // Extract JSON from markdown code blocks
+        const jsonMatch = fullAnalysisContent.match(/```json\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          cleanedContent = jsonMatch[1].trim();
+        }
+      } else if (fullAnalysisContent.includes('```')) {
+        // Handle generic code blocks
+        const codeMatch = fullAnalysisContent.match(/```[\s\S]*?([\s\S]*?)\s*```/);
+        if (codeMatch && codeMatch[1]) {
+          cleanedContent = codeMatch[1].trim();
+        }
+      }
+      
+      const parsedResult = JSON.parse(cleanedContent);
 
       return {
         symbol: chartInfo.symbol,
@@ -582,7 +598,7 @@ export const analyzeOCRText = action({
   },
   handler: async (ctx, { extractedText, prompt }): Promise<TradeAnalysis> => {
     const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-    const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
+    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'; // Fixed URL
 
     if (!DEEPSEEK_API_KEY) {
       console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
@@ -593,12 +609,48 @@ export const analyzeOCRText = action({
     console.log('📝 Extracted text to analyze:', extractedText);
 
     try {
+      // Enhanced prompt for better symbol/timeframe extraction and strategy comparison
+      const enhancedPrompt = `
+Analyze this OCR text from a trading chart and compare it to the active strategy:
+
+OCR TEXT:
+${extractedText}
+
+STRATEGY CONTEXT:
+${prompt}
+
+Please extract the following information and provide analysis:
+1. Trading symbol/pair (look for pairs like GBP/USD, EUR/USD, etc.)
+2. Timeframe (look for 1D, 1H, 4H, etc.)
+3. Current price and key levels
+4. How this setup compares to the active strategy rules
+5. Trade direction suggestion (LONG/SHORT) if applicable
+
+Respond in this exact JSON format:
+{
+  "symbol": "extracted trading pair or null",
+  "timeframe": "extracted timeframe or null",
+  "type": "LONG or SHORT or null",
+  "riskReward": "estimated risk reward ratio or null",
+  "confidence": "number between 0 and 1",
+  "reasoning": "detailed analysis comparing OCR data to strategy",
+  "strategyMatch": {
+    "matchedComponents": ["list of strategy components that match this setup"],
+    "suggestedRules": ["applicable strategy rules for this setup"],
+    "matchConfidence": "number between 0 and 1"
+  }
+}`;
+
       const requestBody = {
         model: 'deepseek-chat',
         messages: [
           {
+            role: 'system',
+            content: 'You are a professional trading analyst. Extract trading information from OCR text and compare it to strategy rules. Always respond with valid JSON.'
+          },
+          {
             role: 'user',
-            content: `${prompt}\n\nExtracted text from trading chart:\n${extractedText}`
+            content: enhancedPrompt
           }
         ],
         temperature: 0.1,
@@ -644,7 +696,21 @@ export const analyzeOCRText = action({
       console.log('✨ DeepSeek analysis result:', content);
 
       try {
-        const analysisResult = JSON.parse(content);
+        // Clean the response to remove markdown code blocks if present
+        let cleanedContent = content;
+        if (content.includes('```json')) {
+          const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch && jsonMatch[1]) {
+            cleanedContent = jsonMatch[1].trim();
+          }
+        } else if (content.includes('```')) {
+          const codeMatch = content.match(/```[\s\S]*?([\s\S]*?)\s*```/);
+          if (codeMatch && codeMatch[1]) {
+            cleanedContent = codeMatch[1].trim();
+          }
+        }
+        
+        const analysisResult = JSON.parse(cleanedContent);
         
         return {
           symbol: analysisResult.symbol || null,
@@ -690,4 +756,173 @@ export const analyzeOCRText = action({
       throw new Error(`DeepSeek analysis failed: ${errorMessage}`);
     }
   },
+});
+
+// Add this interface near the top with other interfaces (around line 115)
+interface ChatbotResponse {
+  message: string;
+  confidence: number;
+  suggestedActions?: string[];
+  relatedRules?: string[];
+}
+
+// Add this action at the end of the file (after the analyzeOCRText action)
+export const chatWithStrategy = action({
+  args: {
+    message: v.string(),
+    strategyContext: v.optional(v.object({
+      name: v.string(),
+      rules: v.array(v.string()),
+      components: v.optional(v.array(v.any())),
+      complexity: v.optional(v.string()),
+      riskProfile: v.optional(v.string())
+    })),
+    conversationHistory: v.optional(v.array(v.object({
+      role: v.string(),
+      content: v.string()
+    })))
+  },
+  handler: async (ctx, { message, strategyContext, conversationHistory = [] }): Promise<ChatbotResponse> => {
+    const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+    const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
+    
+    if (!MISTRAL_API_KEY) {
+      throw new Error('Mistral API key not configured');
+    }
+
+    // Build context-aware prompt
+    let systemPrompt = `You are a helpful trading strategy assistant. You help traders understand and apply their trading strategies effectively.\n\n`;
+    
+    if (strategyContext) {
+      systemPrompt += `Current Strategy: "${strategyContext.name}"\n`;
+      systemPrompt += `Complexity: ${strategyContext.complexity || 'Not specified'}\n`;
+      systemPrompt += `Risk Profile: ${strategyContext.riskProfile || 'Not specified'}\n\n`;
+      
+      if (strategyContext.rules && strategyContext.rules.length > 0) {
+        systemPrompt += `Strategy Rules:\n${strategyContext.rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}\n\n`;
+      }
+      
+      if (strategyContext.components && strategyContext.components.length > 0) {
+        systemPrompt += `Strategy Components:\n${strategyContext.components.map(comp => `- ${comp.name}: ${comp.description}`).join('\n')}\n\n`;
+      }
+    }
+    
+    systemPrompt += `Guidelines:\n- Provide specific, actionable advice\n- Reference the user's strategy rules when relevant\n- Be concise but thorough\n- If asked about entries/exits, relate to their strategy\n- If the user seems confused, break down concepts simply\n- Suggest specific rules or components when helpful`;
+
+    // Build messages array
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory,
+      { role: 'user', content: message }
+    ];
+
+    try {
+      console.log('🤖 Mistral Chatbot request details:', {
+        messageLength: message.length,
+        hasStrategyContext: !!strategyContext,
+        conversationLength: conversationHistory.length,
+        timestamp: new Date().toISOString()
+      });
+      
+      const response = await fetch(MISTRAL_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'mistral-large-latest',
+          messages,
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+  
+      console.log('📡 Mistral API response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Mistral API error response:', errorText);
+        throw new Error(`Mistral API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      if (!isMistralResponse(data)) {
+        throw new Error('Invalid response format from Mistral API');
+      }
+
+      const content = data.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content received from Mistral API');
+      }
+
+      // Handle both string and array content types from Mistral
+      const messageContent = typeof content === 'string' ? content : 
+        (Array.isArray(content) ? content.map(item => item.text || '').join('') : String(content));
+
+      // Extract suggested actions and related rules (simple keyword matching)
+      const suggestedActions: string[] = [];
+      const relatedRules: string[] = [];
+      
+      if (strategyContext?.rules) {
+        strategyContext.rules.forEach((rule, index) => {
+          // Simple keyword matching to find related rules
+          const keywords = message.toLowerCase().split(' ');
+          const ruleWords = rule.toLowerCase().split(' ');
+          
+          const hasMatch = keywords.some(keyword => 
+            ruleWords.some(word => word.includes(keyword) && keyword.length > 3)
+          );
+          
+          if (hasMatch) {
+            relatedRules.push(rule);
+          }
+        });
+      }
+
+      // Simple confidence scoring based on strategy context availability
+      let confidence = 0.7; // Base confidence
+      if (strategyContext) confidence += 0.2;
+      if (relatedRules.length > 0) confidence += 0.1;
+      confidence = Math.min(confidence, 1.0);
+
+      return {
+        message: messageContent,
+        confidence,
+        suggestedActions: suggestedActions.length > 0 ? suggestedActions : undefined,
+        relatedRules: relatedRules.length > 0 ? relatedRules : undefined
+      };
+      
+    } catch (error) {
+      console.error('Mistral Chatbot error:', error);
+      
+      // More specific error handling
+      let errorMessage = "I'm sorry, I encountered an error. Please try again.";
+      
+      if (error instanceof Error) {
+        const errorMsg = error.message.toLowerCase();
+        
+        if (errorMsg.includes('mistral_api_key') || errorMsg.includes('api key')) {
+          errorMessage = "Mistral API key is not configured properly. Please check your environment variables.";
+        } else if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
+          errorMessage = "I'm currently experiencing high demand. Please wait a moment and try again.";
+        } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('connection')) {
+          errorMessage = "I'm having trouble connecting to the AI service. Please check your internet connection and try again.";
+        } else if (errorMsg.includes('timeout')) {
+          errorMessage = "The request took too long to process. Please try with a shorter message.";
+        } else if (errorMsg.includes('invalid') || errorMsg.includes('format')) {
+          errorMessage = "There was an issue processing your request. Please try rephrasing your question.";
+        } else {
+          // Include the actual error for debugging
+          errorMessage = `I encountered an issue: ${error.message}. Please try rephrasing your question or contact support if this persists.`;
+        }
+      }
+      
+      return {
+        message: errorMessage,
+        confidence: 0.1
+      };
+    }
+  }
 });
