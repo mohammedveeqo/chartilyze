@@ -791,8 +791,20 @@ export const chatWithStrategy = action({
     }
 
     // Build context-aware prompt
-    let systemPrompt = `You are a helpful trading strategy assistant. You help traders understand and apply their trading strategies effectively.\n\n`;
-    
+    let systemPrompt = `You are a helpful trading strategy assistant. Provide clear, well-formatted advice using markdown.
+
+FORMATTING GUIDELINES:
+- Use **bold** for important terms and key concepts
+- Use *italic* for emphasis
+- Use bullet points with - for lists
+- Use numbered lists (1. 2. 3.) for sequential steps
+- Use ### for section headers when appropriate
+- Keep responses concise but well-structured
+- Use \`code\` formatting for technical terms like indicators
+- Make text scannable and easy to read
+
+`;
+
     if (strategyContext) {
       systemPrompt += `Current Strategy: "${strategyContext.name}"\n`;
       systemPrompt += `Complexity: ${strategyContext.complexity || 'Not specified'}\n`;
@@ -801,13 +813,14 @@ export const chatWithStrategy = action({
       if (strategyContext.rules && strategyContext.rules.length > 0) {
         systemPrompt += `Strategy Rules:\n${strategyContext.rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}\n\n`;
       }
-      
-      if (strategyContext.components && strategyContext.components.length > 0) {
-        systemPrompt += `Strategy Components:\n${strategyContext.components.map(comp => `- ${comp.name}: ${comp.description}`).join('\n')}\n\n`;
-      }
     }
-    
-    systemPrompt += `Guidelines:\n- Provide specific, actionable advice\n- Reference the user's strategy rules when relevant\n- Be concise but thorough\n- If asked about entries/exits, relate to their strategy\n- If the user seems confused, break down concepts simply\n- Suggest specific rules or components when helpful`;
+
+    systemPrompt += `Response Guidelines:
+- Provide specific, actionable advice
+- Reference strategy rules when relevant
+- Use markdown formatting for better readability
+- Keep under 150 words but well-structured
+- Use formatting to highlight key points`;
 
     // Build messages array
     const messages = [
@@ -831,10 +844,10 @@ export const chatWithStrategy = action({
           'Authorization': `Bearer ${MISTRAL_API_KEY}`,
         },
         body: JSON.stringify({
-          model: 'mistral-large-latest',
+          model: 'mistral-small-latest',
           messages,
           temperature: 0.7,
-          max_tokens: 1000
+          max_tokens: 200  // Further reduced for concise responses
         })
       });
   
@@ -861,10 +874,18 @@ export const chatWithStrategy = action({
       const messageContent = typeof content === 'string' ? content : 
         (Array.isArray(content) ? content.map(item => item.text || '').join('') : String(content));
 
+      // Minimal formatting - preserve markdown but clean up excessive whitespace
+      const cleanedMessage = messageContent
+        .replace(/\n\n\n+/g, '\n\n') // Remove excessive line breaks (3+ becomes 2)
+        .replace(/^\s+|\s+$/g, '') // Trim whitespace
+        .trim();
+
       // Extract suggested actions and related rules (simple keyword matching)
       const suggestedActions: string[] = [];
       const relatedRules: string[] = [];
       
+      // Comment out or remove this entire section:
+      /*
       if (strategyContext?.rules) {
         strategyContext.rules.forEach((rule, index) => {
           // Simple keyword matching to find related rules
@@ -880,6 +901,7 @@ export const chatWithStrategy = action({
           }
         });
       }
+      */
 
       // Simple confidence scoring based on strategy context availability
       let confidence = 0.7; // Base confidence
@@ -888,7 +910,7 @@ export const chatWithStrategy = action({
       confidence = Math.min(confidence, 1.0);
 
       return {
-        message: messageContent,
+        message: cleanedMessage,
         confidence,
         suggestedActions: suggestedActions.length > 0 ? suggestedActions : undefined,
         relatedRules: relatedRules.length > 0 ? relatedRules : undefined

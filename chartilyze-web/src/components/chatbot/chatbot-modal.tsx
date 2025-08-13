@@ -8,6 +8,7 @@ import { useCurrentStrategy } from '@/app/hooks/use-strategy'
 import { useAction } from 'convex/react'
 import { api } from '../../../../chartilyze-backend/convex/_generated/api'
 import { Button } from '@/components/ui/button'
+import ReactMarkdown from 'react-markdown';
 
 interface Message {
   id: string
@@ -24,9 +25,10 @@ interface ChatbotModalProps {
   onClose: () => void
   onMinimize?: () => void
   onNewAIResponse?: () => void
+  isMinimized?: boolean
 }
 
-export function ChatbotModal({ isOpen, onClose, onMinimize, onNewAIResponse }: ChatbotModalProps) {
+export function ChatbotModal({ isOpen, onClose, onMinimize, onNewAIResponse, isMinimized }: ChatbotModalProps) {
   const { user } = useUser()
   const [messages, setMessages] = useState<Message[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
@@ -149,18 +151,25 @@ export function ChatbotModal({ isOpen, onClose, onMinimize, onNewAIResponse }: C
     }
   }
 
-  if (!isOpen) return null
+  // Don't render if neither open nor minimized
+  if (!isOpen && !isMinimized) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-end p-4 sm:p-6">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/20" 
-        onClick={handleBackdropClick}
-      />
+    <div className={`fixed inset-0 z-50 flex items-end justify-end p-4 sm:p-6 ${
+      isMinimized ? 'pointer-events-none opacity-0' : ''
+    }`}>
+      {/* Backdrop - only show when not minimized */}
+      {!isMinimized && (
+        <div 
+          className="absolute inset-0 bg-black/20" 
+          onClick={handleBackdropClick}
+        />
+      )}
       
-      {/* Modal - Fixed to match edit strategy modal structure */}
-      <div className="relative bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-sm sm:max-w-md lg:max-w-lg max-h-full flex flex-col overflow-hidden">
+      {/* Modal */}
+      <div className={`relative bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-sm sm:max-w-md lg:max-w-lg max-h-full flex flex-col overflow-hidden ${
+        isMinimized ? 'hidden' : ''
+      }`}>
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -217,8 +226,28 @@ export function ChatbotModal({ isOpen, onClose, onMinimize, onNewAIResponse }: C
                         : 'bg-gray-800 text-gray-100'
                     }`}
                   >
-                    <p className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                    <p className="text-xs opacity-70 mt-1">
+                    <div className="text-xs sm:text-sm leading-relaxed prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown 
+                        components={{
+                          p: ({children}) => <p className="my-1">{children}</p>,
+                          strong: ({children}) => <strong className="text-blue-300 font-semibold">{children}</strong>,
+                          em: ({children}) => <em className="text-gray-300">{children}</em>,
+                          ul: ({children}) => <ul className="my-2 space-y-1">{children}</ul>,
+                          ol: ({children}) => <ol className="my-2 space-y-1">{children}</ol>,
+                          li: ({children}) => (
+                            <li className="flex items-start gap-2">
+                              <span className="text-blue-400 mt-1 text-xs">•</span>
+                              <span className="flex-1">{children}</span>
+                            </li>
+                          ),
+                          h3: ({children}) => <h3 className="text-sm font-semibold text-blue-300 mt-2 mb-1">{children}</h3>,
+                          code: ({children}) => <code className="bg-gray-700 px-1 py-0.5 rounded text-xs">{children}</code>
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                    <p className="text-xs opacity-70 mt-2">
                       {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>

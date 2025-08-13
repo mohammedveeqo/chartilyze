@@ -41,14 +41,13 @@ export function ChatbotIcon() {
         </button>
       </div>
 
-      {/* Chatbot Modal */}
-      {isOpen && (
-        <ChatbotModal 
-          isOpen={isOpen} 
-          onClose={handleClose}
-          onMinimize={handleMinimize}
-        />
-      )}
+      {/* Chatbot Modal - Keep mounted to preserve state */}
+      <ChatbotModal 
+        isOpen={isOpen || isMinimized} 
+        onClose={handleClose}
+        onMinimize={handleMinimize}
+        isMinimized={isMinimized}
+      />
     </>
   )
 }
