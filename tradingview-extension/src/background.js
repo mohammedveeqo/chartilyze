@@ -2,8 +2,8 @@
 class ChartilyzeBackground {
   constructor() {
     // Use your actual Convex deployment URL
-    this.apiBaseUrl = 'https://your-convex-deployment.convex.cloud/extension';
-    // For local development, use: 'http://localhost:3000/extension'
+    this.apiBaseUrl = 'https://decisive-tapir-206.convex.site';
+    
     
     this.init();
   }
