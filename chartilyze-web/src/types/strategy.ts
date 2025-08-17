@@ -2,6 +2,40 @@ import type { Trade } from './trade'
 
 export type StrategyName = 'Breakout Scalping' | 'Swing Trading' | 'News Trading'
 
+// Strategy Component interface for rule builder
+export interface StrategyComponent {
+  id: string
+  type: 'rule' | 'condition' | 'action' | 'indicator_check' | 'pattern_match'
+  name: string
+  description: string
+  
+  // Rule logic
+  ruleType: 'entry_condition' | 'exit_condition' | 'risk_check' | 'confirmation'
+  logic: {
+    operator: 'AND' | 'OR' | 'NOT'
+    conditions: Array<{
+      indicator?: string
+      pattern?: string
+      comparison: '>' | '<' | '=' | '>=' | '<=' | 'crosses_above' | 'crosses_below'
+      value: number | string
+      timeframe?: string
+    }>
+  }
+  
+  // Actions when rule is triggered
+  actions?: Array<{
+    type: 'enter_long' | 'enter_short' | 'exit_position' | 'set_stop_loss' | 'take_profit'
+    parameters: Record<string, any>
+  }>
+  
+  // Flow connections
+  nextRules?: string[] // IDs of rules to evaluate next
+  parentRules?: string[] // Rules that must be true before this one
+  
+  confidence: number
+  priority: 'high' | 'medium' | 'low'
+}
+
 // New structured rule interface
 export interface StructuredRule {
   id: string

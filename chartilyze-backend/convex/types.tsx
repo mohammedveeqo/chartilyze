@@ -52,3 +52,21 @@ export type Trade = {
   createdAt: number;
   updatedAt: number;
 };
+
+
+export interface RuleCondition {
+  id: string
+  type: 'indicator' | 'price' | 'pattern' | 'time' | 'volume' | 'custom'
+  operator: 'equals' | 'greater' | 'less' | 'between' | 'contains' | 'matches'
+  value: any
+  connector: 'AND' | 'OR'
+  group?: string
+}
+
+export interface RuleAction {
+  id: string
+  type: 'entry' | 'exit' | 'alert' | 'position_size' | 'stop_loss' | 'take_profit' | 'custom'
+  parameters: Record<string, any>
+  delay?: number
+  conditions?: string[]
+}

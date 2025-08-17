@@ -6,27 +6,8 @@ import { Save, X, Wand2, Plus, Trash2, Edit3, Tag, ChevronDown, ChevronRight, Fi
 import { useStrategy } from '@/app/hooks/use-strategy'
 import { useAction, useMutation } from 'convex/react'
 import { api } from '../../../../../chartilyze-backend/convex/_generated/api'
-import type { StrategyFormData } from '@/types/strategy'
+import type { StrategyFormData, StrategyComponent } from '@/types/strategy'
 import { toast } from 'sonner'
-
-interface StrategyComponent {
-  id: string
-  type: 'entry' | 'exit' | 'risk_management' | 'position_sizing' | 'market_condition' | 'level_marking' | 'confirmation'
-  name: string
-  description: string
-  tags: string[]
-  indicators?: Array<{
-    name: string
-    condition: string
-    value: string
-    timeframe?: string
-  }>
-  patterns?: string[]
-  confidence: number
-  priority: 'high' | 'medium' | 'low'
-  timeframes?: string[]
-  conditions?: string[]
-}
 
 interface StrategyModalProps {
   isCreatingNew: boolean

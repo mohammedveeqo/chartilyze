@@ -182,64 +182,93 @@ export const parseStrategy = action({
     enhancedParsing: v.optional(v.boolean()),
   },
   handler: async (ctx, { description, complexity = 'basic', enhancedParsing = false }): Promise<ParsedAdvancedStrategy> => {
-    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+    const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
+    const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
     
-    if (!DEEPSEEK_API_KEY) {
-      console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
-      throw new Error('DEEPSEEK_API_KEY not configured');
+    if (!MISTRAL_API_KEY) {
+      console.error('❌ MISTRAL_API_KEY not found in environment variables');
+      throw new Error('MISTRAL_API_KEY not configured');
     }
 
-    console.log('🔥 Starting strategy analysis');
+    // Add detailed input logging
+    console.log('🔥 Starting strategy analysis with Mistral');
+    console.log('📝 Input description length:', description.length);
+    console.log('📝 Input description preview:', description.substring(0, 200) + (description.length > 200 ? '...' : ''));
+    console.log('⚙️ Enhanced parsing:', enhancedParsing);
     
     try {
+      const prompt = generateStrategyPrompt(description);
+      console.log('📋 Generated prompt length:', prompt.length);
+      
       const requestBody = {
-        model: 'deepseek-chat',
+        model: 'mistral-small-latest',
         messages: [
           {
             role: 'user',
-            content: generateStrategyPrompt(description)
+            content: prompt
           }
         ],
         temperature: 0.1,
-        max_tokens: enhancedParsing ? 4000 : 2000
+        max_tokens: enhancedParsing ? 1500 : 1000
       };
 
-      const response = await fetch(DEEPSEEK_API_URL, {
+      console.log('🚀 Sending request to Mistral with max_tokens:', requestBody.max_tokens);
+
+      const response = await fetch(MISTRAL_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
         },
         body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ DeepSeek API error response:', errorText);
-        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
+        console.error('❌ Mistral API error response:', errorText);
+        throw new Error(`Mistral API error: ${response.status} ${response.statusText}`);
       }
 
       const rawData: unknown = await response.json();
       
-      if (!isDeepSeekResponse(rawData)) {
-        throw new Error('Invalid response format from DeepSeek API');
+      if (!isMistralResponse(rawData)) {
+        throw new Error('Invalid response format from Mistral API');
       }
 
-      const data: DeepSeekResponse = rawData;
+      const data: MistralResponse = rawData;
       const content = data.choices[0]?.message?.content;
 
       if (!content) {
-        throw new Error('No content received from DeepSeek API');
+        throw new Error('No content received from Mistral API');
       }
 
+      // Handle both string and array content types
+      let textContent: string;
+      if (typeof content === 'string') {
+        textContent = content;
+      } else {
+        // If content is an array, extract text from the first text element
+        const textElement = content.find(item => item.type === 'text' && item.text);
+        textContent = textElement?.text || '';
+      }
+
+      // Add response logging
+      console.log('📤 Raw AI response length:', textContent.length);
+      console.log('📤 Raw AI response preview:', textContent.substring(0, 300) + (textContent.length > 300 ? '...' : ''));
+      console.log('🔧 Token usage:', data.usage);
+
       // Clean and parse the content
-      let cleanContent = content.trim();
+      let cleanContent = textContent.trim();
       if (cleanContent.startsWith('```json')) {
         cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
       }
 
+      console.log('🧹 Cleaned content length:', cleanContent.length);
+
       const parsedStrategy = JSON.parse(cleanContent) as ParsedAdvancedStrategy;
+      
+      console.log('✅ Successfully parsed strategy with', parsedStrategy.components.length, 'components');
+      console.log('📊 Strategy name:', parsedStrategy.suggestedName);
 
       return {
         components: parsedStrategy.components || [],

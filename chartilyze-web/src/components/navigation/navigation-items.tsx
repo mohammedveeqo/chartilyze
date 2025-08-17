@@ -1,4 +1,4 @@
-import { LayoutDashboard, BookOpen, BarChart2, Users } from 'lucide-react'
+import { LayoutDashboard, BookOpen, BarChart2, Users, Settings } from 'lucide-react'
 
 export const navigationItems = [
   {
@@ -15,6 +15,11 @@ export const navigationItems = [
     name: 'Analytics',
     icon: BarChart2,
     href: '/analytics'
+  },
+  {
+    name: 'Rule Builder',
+    icon: Settings,
+    href: '/rule-builder'
   },
   {
     name: 'Community',
