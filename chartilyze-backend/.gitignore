@@ -4,3 +4,5 @@ echo "node_modules
 convex/_generated
 .next
 dist" > .gitignore
+
+.env.local

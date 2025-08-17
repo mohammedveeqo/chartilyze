@@ -3,16 +3,24 @@
   "name": "Chartilyze - AI Trading Assistant",
   "version": "1.0.0",
   "description": "AI-powered trading assistant for TradingView with chat interface and journal integration",
+  "icons": {
+    "16": "public/icons/icon16.png",
+    "32": "public/icons/icon32.png",
+    "48": "public/icons/icon48.png",
+    "128": "public/icons/icon128.png"
+  },
   "permissions": [
     "activeTab",
     "storage",
     "scripting",
-    "tabs"
+    "tabs",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://www.tradingview.com/*",
     "https://chartilyze.com/*",
-    "https://*.chartilyze.com/*"
+    "https://*.chartilyze.com/*",
+    "https://decisive-tapir-206.convex.site/*"
   ],
   "content_scripts": [
     {
@@ -27,23 +35,11 @@
   },
   "action": {
     "default_popup": "public/popup.html",
-    "default_title": "Chartilyze AI Assistant",
-    "default_icon": {
-      "16": "public/icons/icon16.png",
-      "32": "public/icons/icon32.png",
-      "48": "public/icons/icon48.png",
-      "128": "public/icons/icon128.png"
-    }
-  },
-  "icons": {
-    "16": "public/icons/icon16.png",
-    "32": "public/icons/icon32.png",
-    "48": "public/icons/icon48.png",
-    "128": "public/icons/icon128.png"
+    "default_title": "Chartilyze AI Assistant"
   },
   "web_accessible_resources": [
     {
-      "resources": ["public/icons/*", "public/styles.css"],
+      "resources": ["public/styles.css"],
       "matches": ["https://www.tradingview.com/*"]
     }
   ]

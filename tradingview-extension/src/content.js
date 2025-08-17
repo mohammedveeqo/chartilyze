@@ -76,7 +76,7 @@ class ChartilyzeInjector {
 
         floatingBtn.addEventListener('mouseenter', () => {
             floatingBtn.style.transform = 'scale(1.1)';
-            floatingBtn.style.boxShadow = '0 6px 20px rgba(0, 212, 170, 0.5)';
+            floatingBtn.style.boxShadow = '0 212, 170, 0.5)';
         });
 
         floatingBtn.addEventListener('mouseleave', () => {
@@ -151,6 +151,8 @@ class ChartilyzeInjector {
         chrome.runtime.sendMessage({
             action: 'openPopup',
             chartData: this.captureChartData()
+        }).catch(error => {
+            console.error('Failed to send openPopup message:', error);
         });
     }
 

@@ -2,7 +2,7 @@
 
 import { useCurrentStrategy } from '@/app/hooks/use-strategy'
 import { useQuery } from 'convex/react'
-import { api } from '/home/Rassell/chartilyze/chartilyze-backend/convex/_generated/api'
+import { api } from '../../../../../chartilyze-backend/convex/_generated/api'
 
 export function StrategyDetails() {
   const { currentStrategy } = useCurrentStrategy()

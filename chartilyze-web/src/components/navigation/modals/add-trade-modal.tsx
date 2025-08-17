@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { Camera, X, Upload, Wand2, CheckCircle, AlertTriangle, TrendingUp, Edit3, Heart, MessageSquare, Target } from 'lucide-react'
 import { useCurrentStrategy } from '@/app/hooks/use-strategy'
 import { useAction, useMutation } from 'convex/react'
-import { api } from '/home/Rassell/chartilyze/chartilyze-backend/convex/_generated/api'
+import { api } from '../../../../../chartilyze-backend/convex/_generated/api'
 import { toast } from 'sonner'
 
 // Types

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { useQuery } from 'convex/react'
-import { api } from '/home/Rassell/chartilyze/chartilyze-backend/convex/_generated/api'
-import type { Doc, Id } from '/home/Rassell/chartilyze/chartilyze-backend/convex/_generated/dataModel'
+import { api } from '@convex/_generated/api'
+import { Doc, Id } from '@convex/_generated/dataModel'
 
 type Journal = Doc<"journals">
 

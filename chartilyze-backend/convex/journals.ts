@@ -155,6 +155,17 @@ export const deleteJournal = mutation({
 });
 
 // Enhanced create mutation to handle AI strategy data
+// Add input validation helper
+function validateJournalInput(args: any) {
+  if (!args.name || args.name.trim().length === 0) {
+    throw new ConvexError("Journal name is required");
+  }
+  if (args.name.length > 100) {
+    throw new ConvexError("Journal name too long (max 100 characters)");
+  }
+  // Add more validations as needed
+}
+
 export const create = mutation({
   args: {
     name: v.string(),
@@ -187,6 +198,7 @@ export const create = mutation({
     )
   },
   handler: async (ctx, args) => {
+    validateJournalInput(args);
     console.log("Starting journal creation...");
     
     const identity = await ctx.auth.getUserIdentity();
