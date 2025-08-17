@@ -20,14 +20,24 @@ class ChartilyzeBackground {
     });
   }
 
+  // Fixed: Changed from function declaration to method declaration and added async
   async handleMessage(request, sender, sendResponse) {
     try {
-      // Add request validation
-      if (!request.action) {
-        throw new Error('Missing action in request');
-      }
+      console.log('Background received message:', request);
       
       switch (request.action) {
+        case 'openPopup':
+          // For side panel, we open the side panel instead
+          try {
+            await chrome.sidePanel.open({ windowId: sender.tab.windowId });
+            console.log('Side panel opened successfully');
+            sendResponse({ success: true });
+          } catch (error) {
+            console.error('Failed to open side panel:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+              
         case 'sendChatMessage':
           const chatResponse = await this.sendChatMessage(request.data);
           sendResponse({ success: true, data: chatResponse });
@@ -46,17 +56,6 @@ class ChartilyzeBackground {
         case 'analyzeChart':
           const analysis = await this.analyzeChart(request.data);
           sendResponse({ success: true, data: analysis });
-          break;
-
-        case 'openPopup':
-          // Open the extension popup
-          try {
-            await chrome.action.openPopup();
-            sendResponse({ success: true });
-          } catch (error) {
-            console.log('Popup already open or user interaction required');
-            sendResponse({ success: true, message: 'Popup handled' });
-          }
           break;
 
         default:
@@ -103,3 +102,6 @@ class ChartilyzeBackground {
 
 // Initialize background script
 new ChartilyzeBackground();
+
+// Add side panel setup
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });

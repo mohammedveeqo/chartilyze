@@ -2,6 +2,8 @@ class ChartilyzeChat {
     constructor() {
         this.messages = [];
         this.isLoading = false;
+        this.currentStrategy = null;
+        this.conversationHistory = [];
         this.init();
     }
 
@@ -10,6 +12,7 @@ class ChartilyzeChat {
         this.bindEvents();
         this.setupAutoResize();
         this.setInitialTime();
+        this.loadCurrentStrategy();
     }
 
     bindElements() {
@@ -43,6 +46,28 @@ class ChartilyzeChat {
         });
     }
 
+    async loadCurrentStrategy() {
+        try {
+            // Try to get current strategy from storage or API
+            const result = await chrome.storage.local.get(['currentStrategy']);
+            if (result.currentStrategy) {
+                this.currentStrategy = result.currentStrategy;
+                this.updateHeaderWithStrategy();
+            }
+        } catch (error) {
+            console.log('No strategy context available:', error);
+        }
+    }
+
+    updateHeaderWithStrategy() {
+        if (this.currentStrategy) {
+            const subtitle = document.querySelector('.header-subtitle');
+            if (subtitle) {
+                subtitle.textContent = `Active: ${this.currentStrategy.name}`;
+            }
+        }
+    }
+
     handleInputChange() {
         const hasText = this.messageInput.value.trim().length > 0;
         this.sendButton.disabled = !hasText || this.isLoading;
@@ -57,9 +82,9 @@ class ChartilyzeChat {
 
     handleQuickAction(action) {
         const prompts = {
-            analyze: "Can you help me analyze the current chart?",
-            strategy: "I need help with my trading strategy",
-            journal: "How should I document this trade?"
+            analyze: "Can you help me analyze the current chart setup?",
+            strategy: "I need guidance on my current trading strategy",
+            journal: "How should I document this trade in my journal?"
         };
         
         if (prompts[action]) {
@@ -75,6 +100,8 @@ class ChartilyzeChat {
 
         // Add user message
         this.addMessage(message, 'user');
+        this.conversationHistory.push({ role: 'user', content: message });
+        
         this.messageInput.value = '';
         this.messageInput.style.height = 'auto';
         this.handleInputChange();
@@ -83,36 +110,56 @@ class ChartilyzeChat {
         this.showLoading();
 
         try {
-            // For now, simulate AI response since we need to fix the backend connection
-            const response = await this.simulateAIResponse(message);
+            const response = await this.sendToAPI(message);
             this.hideLoading();
-            this.addMessage(response, 'bot');
+            
+            // Add bot message with enhanced formatting
+            this.addMessage(response.message, 'bot', false, response);
+            this.conversationHistory.push({ role: 'assistant', content: response.message });
+            
+            // Keep conversation history manageable (last 6 messages)
+            if (this.conversationHistory.length > 6) {
+                this.conversationHistory = this.conversationHistory.slice(-6);
+            }
         } catch (error) {
             this.hideLoading();
-            this.addMessage('Sorry, I encountered an error. Please try again.', 'bot', true);
+            this.addMessage('Sorry, I encountered an error connecting to the server. Please try again.', 'bot', true);
             console.error('Chat error:', error);
         }
     }
 
-    async simulateAIResponse(message) {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
+    async sendToAPI(message) {
+        // Use your Convex backend API endpoint
+        const API_URL = 'https://decisive-tapir-206.convex.cloud';
         
-        // Simple response logic for demo
-        const lowerMessage = message.toLowerCase();
-        
-        if (lowerMessage.includes('analyze') || lowerMessage.includes('chart')) {
-            return "I can see you're interested in chart analysis. To provide better insights, I would need to connect to the chart data from TradingView. This feature is currently being enhanced to work with your trading strategy.";
-        } else if (lowerMessage.includes('strategy')) {
-            return "Great question about strategy! A solid trading strategy should include:\n\n• **Entry criteria** - Clear signals for when to enter\n• **Exit rules** - Both profit targets and stop losses\n• **Risk management** - Position sizing and maximum risk per trade\n• **Market conditions** - When your strategy works best\n\nWhat specific aspect of your strategy would you like to discuss?";
-        } else if (lowerMessage.includes('journal')) {
-            return "Excellent! Keeping a trading journal is crucial for improvement. Here's what you should document:\n\n• **Trade setup** - Why you entered the trade\n• **Market context** - What was happening in the market\n• **Emotions** - How you felt before, during, and after\n• **Outcome** - What happened and why\n• **Lessons** - What you learned for next time\n\nWould you like help setting up a specific journal entry?";
-        } else {
-            return "I'm here to help with your trading questions! I can assist with chart analysis, strategy development, risk management, and trade journaling. What specific trading topic would you like to explore?";
+        const requestBody = {
+            message: message,
+            strategyContext: this.currentStrategy ? {
+                name: this.currentStrategy.name,
+                rules: this.currentStrategy.rules || [],
+                components: this.currentStrategy.components,
+                complexity: this.currentStrategy.complexity,
+                riskProfile: this.currentStrategy.riskProfile
+            } : undefined,
+            conversationHistory: this.conversationHistory
+        };
+
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
         }
+
+        return await response.json();
     }
 
-    addMessage(content, type, isError = false) {
+    addMessage(content, type, isError = false, responseData = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${type}`;
         
@@ -125,7 +172,7 @@ class ChartilyzeChat {
         const messageContent = document.createElement('div');
         messageContent.className = `message-content ${isError ? 'error-message' : ''}`;
         
-        // Simple markdown-like formatting
+        // Enhanced markdown formatting
         const formattedContent = this.formatMessage(content);
         messageContent.innerHTML = formattedContent;
         
@@ -134,6 +181,31 @@ class ChartilyzeChat {
         messageTime.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
         contentWrapper.appendChild(messageContent);
+        
+        // Add related rules if available (like in web app)
+        if (responseData?.relatedRules && responseData.relatedRules.length > 0) {
+            const rulesSection = document.createElement('div');
+            rulesSection.style.cssText = 'margin-top: 12px; padding: 8px; background: rgba(59, 130, 246, 0.1); border-radius: 6px; border-left: 3px solid #3b82f6;';
+            
+            const rulesHeader = document.createElement('div');
+            rulesHeader.style.cssText = 'font-size: 11px; color: #3b82f6; font-weight: 600; margin-bottom: 4px;';
+            rulesHeader.textContent = '💡 Related Strategy Rules';
+            
+            const rulesList = document.createElement('ul');
+            rulesList.style.cssText = 'font-size: 11px; color: #d1d5db; margin: 0; padding-left: 16px;';
+            
+            responseData.relatedRules.forEach(rule => {
+                const listItem = document.createElement('li');
+                listItem.style.cssText = 'margin: 2px 0;';
+                listItem.textContent = rule;
+                rulesList.appendChild(listItem);
+            });
+            
+            rulesSection.appendChild(rulesHeader);
+            rulesSection.appendChild(rulesList);
+            contentWrapper.appendChild(rulesSection);
+        }
+        
         contentWrapper.appendChild(messageTime);
         
         messageDiv.appendChild(avatar);
@@ -147,6 +219,8 @@ class ChartilyzeChat {
         return content
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code style="background: rgba(59, 130, 246, 0.2); padding: 2px 4px; border-radius: 3px; font-family: monospace;">$1</code>')
+            .replace(/###\s*(.*?)(?=\n|$)/g, '<h3 style="font-size: 14px; font-weight: 600; margin: 8px 0 4px 0; color: #3b82f6;">$1</h3>')
             .replace(/•\s*(.*?)(?=\n|$)/g, '<div style="margin: 4px 0; padding-left: 16px; position: relative;"><span style="position: absolute; left: 0; color: #3b82f6;">•</span>$1</div>')
             .replace(/\n/g, '<br>');
     }
