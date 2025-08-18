@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useQuery } from 'convex/react'
+import { useEffect } from 'react' // Add this import
 import { api } from '@convex/_generated/api'
 import { Doc, Id } from '@convex/_generated/dataModel'
 
@@ -73,7 +74,7 @@ export const useCurrentStrategy = () => {
   
   // Auto-select first strategy if none selected and strategies exist
   if (!currentStrategyId && strategies.length > 0 && !isLoading) {
-    setCurrentStrategy(strategies[0].id)
+    setCurrentStrategy(strategies[0].id) // ❌ This causes setState during render!
   }
   
   const currentStrategy = strategies.find(s => s.id === currentStrategyId)

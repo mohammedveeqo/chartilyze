@@ -129,8 +129,8 @@ class ChartilyzeChat {
     }
 
     async sendToAPI(message) {
-        // Use your Convex backend API endpoint
-        const API_URL = 'https://decisive-tapir-206.convex.cloud';
+        // ✅ Fixed: Use the correct HTTP Actions URL with proper endpoint
+        const API_URL = 'https://decisive-tapir-206.convex.site/extension/chat';
         
         const requestBody = {
             message: message,
@@ -143,7 +143,7 @@ class ChartilyzeChat {
             } : undefined,
             conversationHistory: this.conversationHistory
         };
-
+    
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -151,11 +151,11 @@ class ChartilyzeChat {
             },
             body: JSON.stringify(requestBody)
         });
-
+    
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
-
+    
         return await response.json();
     }
 

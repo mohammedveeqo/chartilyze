@@ -248,9 +248,141 @@ class ChartilyzeInjector {
         };
     }
 
-    setupMessageListener() {
-        chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-            if (request.action === 'captureChart') {
+    async setupMessageListener() {
+        // Add message listener for strategy requests
+        chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+            if (request.type === 'GET_CURRENT_STRATEGY') {
+                try {
+                    // Try to get current strategy from the web app
+                    const getCurrentStrategy = () => {
+                        // Method 1: Try to access Zustand store if exposed
+                        if (window.__ZUSTAND_STORE__) {
+                            const store = window.__ZUSTAND_STORE__;
+                            const currentStrategyId = store.currentStrategyId;
+                            if (currentStrategyId && window.__STRATEGIES__) {
+                                return window.__STRATEGIES__.find(s => s.id === currentStrategyId);
+                            }
+                        }
+                        
+                        // Method 2: Try to find strategy data in DOM
+                        const strategyElement = document.querySelector('[data-strategy-name]');
+                        if (strategyElement) {
+                            return {
+                                name: strategyElement.getAttribute('data-strategy-name'),
+                                id: strategyElement.getAttribute('data-strategy-id'),
+                                // Add more attributes as needed
+                            };
+                        }
+                        
+                        // Method 3: Try localStorage
+                        const strategyData = localStorage.getItem('currentStrategy');
+                        if (strategyData) {
+                            return JSON.parse(strategyData);
+                        }
+                        
+                        return null;
+                    };
+                    
+                    const strategy = getCurrentStrategy();
+                    sendResponse({ strategy });
+                } catch (error) {
+                    console.log('Error getting strategy:', error);
+                    sendResponse({ strategy: null });
+                }
+                return true; // Keep message channel open for async response
+            } else if (request.action === 'GET_USER_TOKEN') {
+                try {
+                    let token = null;
+                    let userId = null;
+                    
+                    // Method 1: Check window object
+                    if (window.__CHARTILYZE_USER__) {
+                        token = window.__CHARTILYZE_USER__.token;
+                        userId = window.__CHARTILYZE_USER__.userId;
+                        console.log('Found user data in window object:', { userId, hasToken: !!token });
+                    }
+                    
+                    // Method 2: Check localStorage
+                    if (!token || !userId) {
+                        userId = localStorage.getItem('chartilyze_user_id');
+                        token = localStorage.getItem('chartilyze_token');
+                        console.log('Found user data in localStorage:', { userId, hasToken: !!token });
+                    }
+                    
+                    // Method 3: Try to get from Clerk (if available)
+                    if (!token && window.Clerk) {
+                        try {
+                            const session = await window.Clerk.session;
+                            if (session) {
+                                token = await session.getToken({ template: 'convex' });
+                                userId = session.user?.id;
+                                console.log('Found user data from Clerk:', { userId, hasToken: !!token });
+                            }
+                        } catch (clerkError) {
+                            console.log('Clerk method failed:', clerkError);
+                        }
+                    }
+                    
+                    // Method 4: Fallback to other Clerk methods
+                    if (!userId) {
+                        // Try to get user ID from Clerk
+                        if (window.__CLERK_USER_ID__) {
+                            userId = window.__CLERK_USER_ID__;
+                        }
+                        
+                        // Try to get user data from localStorage
+                        const clerkUser = localStorage.getItem('clerk-user') || 
+                            sessionStorage.getItem('clerk-user');
+                        
+                        if (clerkUser) {
+                            try {
+                                const userData = JSON.parse(clerkUser);
+                                userId = userData.id || userData.userId;
+                            } catch (e) {
+                                console.log('Failed to parse clerk user data:', e);
+                            }
+                        }
+                        
+                        // Try to get JWT token from Clerk
+                        if (!token && window.__CLERK_USER_TOKEN__) {
+                            token = window.__CLERK_USER_TOKEN__;
+                        }
+                        
+                        // Try to get token from localStorage/sessionStorage
+                        if (!token) {
+                            const clerkToken = localStorage.getItem('clerk-db-jwt') || 
+                                sessionStorage.getItem('clerk-db-jwt') ||
+                                localStorage.getItem('__clerk_client_jwt') ||
+                                sessionStorage.getItem('__clerk_client_jwt');
+                            
+                            if (clerkToken) {
+                                token = clerkToken;
+                            }
+                        }
+                    }
+                    
+                    if (token && userId) {
+                        sendResponse({ 
+                            success: true, 
+                            token: token, // ✅ CORRECT: Send actual JWT token
+                            userId: userId 
+                        });
+                    } else {
+                        console.error('No user authentication found');
+                        sendResponse({ 
+                            success: false, 
+                            error: 'No user authentication found' 
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error getting user token:', error);
+                    sendResponse({ 
+                        success: false, 
+                        error: error.message 
+                    });
+                }
+                return true; // Keep message channel open for async response
+            } else if (request.action === 'captureChart') {
                 const chartData = this.captureChartData();
                 sendResponse({ success: true, data: chartData });
             } else if (request.action === 'captureScreenshot') {
@@ -262,6 +394,37 @@ class ChartilyzeInjector {
                 return true; // Keep message channel open for async response
             }
         });
+        
+        // Listen for strategy changes in the web app
+        const observeStrategyChanges = () => {
+            // Watch for changes in strategy selector or strategy name elements
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                        // Check if strategy-related elements changed
+                        const strategyElements = document.querySelectorAll('[data-strategy-name], .strategy-name, .current-strategy');
+                        if (strategyElements.length > 0) {
+                            // Strategy might have changed, clear cached data
+                            chrome.storage.local.remove(['currentStrategy']);
+                        }
+                    }
+                });
+            });
+            
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['data-strategy-name', 'data-strategy-id']
+            });
+        };
+        
+        // Start observing when page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', observeStrategyChanges);
+        } else {
+            observeStrategyChanges();
+        }
     }
 
     async captureScreenshot() {

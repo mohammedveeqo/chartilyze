@@ -232,6 +232,18 @@ export const create = mutation({
   }
 });
 
+export const getJournalsByUserId = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const journals = await ctx.db
+      .query("journals")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    
+    return journals;
+  },
+});
+
 
 
 

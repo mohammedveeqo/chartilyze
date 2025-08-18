@@ -10,19 +10,14 @@
     "128": "public/icons/icon128.png"
   },
   "permissions": [
-    "activeTab",
+    "identity",
     "storage",
+    "activeTab",
     "sidePanel"
   ],
   "host_permissions": [
-    "https://www.tradingview.com/*",
-    "https://tradingview.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": ["https://www.tradingview.com/*", "https://tradingview.com/*"],
-      "js": ["src/content.js"]
-    }
+    "https://decisive-tapir-206.convex.site/*",
+    "https://your-chartilyze-domain.com/*"
   ],
   "background": {
     "service_worker": "src/background.js"
@@ -32,5 +27,11 @@
   },
   "action": {
     "default_title": "Open Chartilyze Assistant"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.tradingview.com/*"],
+      "js": ["src/content.js"]
+    }
+  ]
 }

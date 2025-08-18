@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useUser, useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../chartilyze-backend/convex/_generated/api";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import TradeDetails from "@/components/dashboard/trade-details";
 
 export default function DashboardClient() {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const storeUser = useMutation(api.users.storeUser);
   const journalsData = useQuery(api.journals.getUserJournals);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -50,6 +51,37 @@ export default function DashboardClient() {
       setShowWelcomeModal(true);
     }
   }, [journalsData]);
+
+  // Expose user data to window object for extension access
+  useEffect(() => {
+    const exposeUserData = async () => {
+      if (!user?.id) return;
+
+      try {
+        // Get Convex JWT token
+        const token = await getToken({ template: "convex" });
+        
+        // Expose data to window object
+        (window as any).__CHARTILYZE_USER__ = {
+          userId: user.id,
+          email: user.emailAddresses[0]?.emailAddress,
+          token: token
+        };
+        
+        // Also store in localStorage as backup
+        localStorage.setItem('chartilyze_user_id', user.id);
+        if (token) {
+          localStorage.setItem('chartilyze_token', token);
+        }
+        
+        console.log('User data exposed for extension:', { userId: user.id, hasToken: !!token });
+      } catch (error) {
+        console.error('Failed to expose user data:', error);
+      }
+    };
+
+    exposeUserData();
+  }, [user, getToken]);
 
   // Show loading state while fetching journals
   if (journalsData === undefined) {

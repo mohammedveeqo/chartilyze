@@ -50,6 +50,52 @@
             color: #333;
         }
         
+        .header-subtitle {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        
+        /* Quick Actions */
+        .quick-actions {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e9ecef;
+            background: #ffffff;
+            flex-shrink: 0;
+        }
+        
+        .quick-actions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        
+        .quick-action {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .quick-action:hover {
+            background: #e9ecef;
+            border-color: #007bff;
+            color: #007bff;
+        }
+        
+        .quick-action-icon {
+            width: 16px;
+            height: 16px;
+            margin: 0 auto 4px;
+            display: block;
+        }
+        
         /* Messages Container */
         .messages-container {
             flex: 1;
@@ -99,6 +145,52 @@
             font-size: 11px;
             color: #6c757d;
             margin: 0 16px;
+        }
+        
+        /* Strategy Workflow */
+        .strategy-workflow {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        
+        .workflow-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .workflow-steps {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .workflow-step {
+            padding: 4px 0;
+            color: #6c757d;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .step-number {
+            background: #007bff;
+            color: white;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
         }
         
         /* Loading */
@@ -228,12 +320,171 @@
             font-size: 12px;
             margin-bottom: 8px;
         }
+        
+        .loading-text {
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        
+        /* Authentication UI */
+        .auth-container {
+            display: none;
+            flex: 1;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            text-align: center;
+            background: #ffffff;
+        }
+        
+        .auth-card {
+            background: #ffffff;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 32px 24px;
+            max-width: 280px;
+            width: 100%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .auth-icon {
+            width: 48px;
+            height: 48px;
+            background: #007bff;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0 auto 16px;
+        }
+        
+        .auth-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .auth-description {
+            font-size: 14px;
+            color: #6c757d;
+            line-height: 1.4;
+            margin-bottom: 24px;
+        }
+        
+        .auth-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .auth-button:hover {
+            background: #0056b3;
+        }
+        
+        .auth-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .auth-loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #6c757d;
+        }
+        
+        .auth-loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e9ecef;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .auth-error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-top: 16px;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="header-icon">C</div>
-        <h1>Chartilyze</h1>
+        <div>
+            <h1>Chartilyze</h1>
+            <div class="header-subtitle" id="strategySubtitle">Ready to assist</div>
+        </div>
+    </div>
+    
+    <!-- Authentication Container -->
+    <div class="auth-container" id="authContainer">
+        <div class="auth-card">
+            <div class="auth-icon">C</div>
+            <div class="auth-title">Sign in to Chartilyze</div>
+            <div class="auth-description">
+                Connect your Chartilyze account to access AI-powered trading insights and strategy analysis.
+            </div>
+            <button class="auth-button" id="signInButton">
+                🔗 Sign in with Chartilyze
+            </button>
+            <div class="auth-loading" id="authLoading">
+                <div class="auth-loading-spinner"></div>
+                Signing you in...
+            </div>
+            <div class="auth-error" id="authError"></div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Section -->
+    <div class="quick-actions">
+        <div class="quick-actions-grid">
+            <button class="quick-action" data-action="journal">
+                <svg class="quick-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14,2 14,8 20,8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10,9 9,9 8,9"></polyline>
+                </svg>
+                Journal Workflow
+            </button>
+            <button class="quick-action" data-action="strategy">
+                <svg class="quick-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"></polyline>
+                </svg>
+                Strategy Guide
+            </button>
+        </div>
     </div>
     
     <div class="messages-container" id="messagesContainer">
@@ -257,6 +508,168 @@
         </div>
     </div>
     
-    <script src="/src/sidepanel.js"></script>
+    <!-- Add this after the header and before quick-actions -->
+    <div class="strategy-selector">
+    <div class="strategy-selector-header">
+    <span class="strategy-label">Active Strategy:</span>
+    <button class="strategy-dropdown-btn" id="strategyDropdownBtn">
+    <span class="selected-strategy" id="selectedStrategy">Loading...</span>
+    <span class="dropdown-arrow">▼</span>
+    </button>
+    </div>
+    <div class="strategy-dropdown" id="strategyDropdown" style="display: none;">
+    <div class="strategy-search">
+    <input type="text" placeholder="Search strategies..." id="strategySearch">
+    </div>
+    <div class="strategy-list" id="strategyList">
+    <!-- Strategies will be populated here -->
+    </div>
+    </div>
+    </div>
+    
+    <!-- Add CSS styles -->
+    <style>
+    /* Strategy Selector */
+    .strategy-selector {
+    padding: 12px 20px;
+    border-bottom: 1px solid #e9ecef;
+    background: #ffffff;
+    position: relative;
+    flex-shrink: 0;
+    }
+    
+    .strategy-selector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    }
+    
+    .strategy-label {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+    }
+    
+    .strategy-dropdown-btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #495057;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 0;
+    }
+    
+    .strategy-dropdown-btn:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+    }
+    
+    .selected-strategy {
+    flex: 1;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    }
+    
+    .dropdown-arrow {
+    font-size: 10px;
+    color: #6c757d;
+    transition: transform 0.2s ease;
+    }
+    
+    .strategy-dropdown-btn.open .dropdown-arrow {
+    transform: rotate(180deg);
+    }
+    
+    .strategy-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 20px;
+    right: 20px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    max-height: 300px;
+    overflow: hidden;
+    }
+    
+    .strategy-search {
+    padding: 12px;
+    border-bottom: 1px solid #e9ecef;
+    }
+    
+    .strategy-search input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    }
+    
+    .strategy-search input:focus {
+    border-color: #007bff;
+    }
+    
+    .strategy-list {
+    max-height: 200px;
+    overflow-y: auto;
+    }
+    
+    .strategy-item {
+    padding: 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f8f9fa;
+    transition: background-color 0.2s ease;
+    }
+    
+    .strategy-item:hover {
+    background: #f8f9fa;
+    }
+    
+    .strategy-item.selected {
+    background: #e3f2fd;
+    color: #1976d2;
+    }
+    
+    .strategy-item:last-child {
+    border-bottom: none;
+    }
+    
+    .strategy-name {
+    font-weight: 500;
+    font-size: 13px;
+    margin-bottom: 2px;
+    }
+    
+    .strategy-meta {
+    font-size: 11px;
+    color: #6c757d;
+    display: flex;
+    gap: 8px;
+    }
+    
+    .strategy-complexity {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: capitalize;
+    }
+    </style>
+    
+    <!-- Load JavaScript files -->
+    <script src="../src/auth.js"></script>
+    <script src="../src/sidepanel.js"></script>
 </body>
 </html>
