@@ -5,6 +5,7 @@ import './globals.css'
 import { ClerkProvider } from '@clerk/nextjs'
 import { ConvexClientProvider } from './providers'
 import { ChatbotIcon } from '@/components/chatbot/chatbot-icon'
+import { ExtensionAuthDetector } from '@/components/auth/extension-auth-detector'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -39,6 +40,7 @@ export default function RootLayout({
       <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`}>
         <ClerkProvider>
           <ConvexClientProvider>
+            <ExtensionAuthDetector />
             {children}
             <ChatbotIcon />
           </ConvexClientProvider>

@@ -2,9 +2,11 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import jwt from 'jsonwebtoken';
+// Remove this line:
+// import jwt from 'jsonwebtoken';
 
 const http = httpRouter();
+
 
 // Type definitions for request bodies
 interface ChatRequestBody {
@@ -33,6 +35,21 @@ interface ExtensionTokenRequestBody {
   clerkSessionId: string;
   clerkUserId: string;
   clerkToken?: string;
+}
+
+// Add these new interfaces
+interface ValidateStoredSessionRequestBody {
+  sessionData: {
+    hasCookieSession?: boolean;
+    hasStoredSession?: boolean;
+    cookies?: Array<{ name: string; value: string; domain: string }>;
+    clerkData?: any;
+    clerkSession?: any;
+  };
+}
+
+interface ValidateExtensionTokenRequestBody {
+  token: string;
 }
 
 // CORS headers for browser extension
@@ -404,20 +421,20 @@ http.route({
   path: "/auth/verify",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response("Missing or invalid authorization header", { status: 401 });
+    const url = new URL(request.url);
+    const token = url.searchParams.get('token');
+    
+    if (!token) {
+      return new Response("Token required", { status: 400 });
     }
     
-    const token = authHeader.substring(7);
-    
     try {
-      // Verify JWT token (same logic as existing endpoints)
+      // Decode base64 token instead of JWT
       let userId;
       try {
-        const decoded = jwt.decode(token) as any;
-        userId = decoded?.sub;
-      } catch (jwtError) {
+        const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
+        userId = decoded?.userId;
+      } catch (decodeError) {
         userId = token; // Fallback
       }
       
@@ -432,129 +449,227 @@ http.route({
           ...corsHeaders
         }
       });
+      
     } catch (error) {
-      return new Response("Token verification failed", { status: 401 });
+      console.error('Token verification error:', error);
+      return new Response("Invalid token", { 
+        status: 401,
+        headers: { ...corsHeaders }
+      });
     }
   })
 });
 
 // Add these new endpoints after the existing auth endpoints
 
-// Convert Clerk session to extension-compatible JWT
+// Extension token conversion endpoint
 http.route({
   path: "/auth/extension-token",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const body = await request.json() as ExtensionTokenRequestBody;
-    const { clerkSessionId, clerkUserId, clerkToken } = body;
-    
     try {
+      const body = await request.json() as ExtensionTokenRequestBody;
+      const { clerkSessionId, clerkUserId } = body;
+      
       // Validate the Clerk session with Clerk's API
-      const clerkValidation = await fetch(`https://api.clerk.dev/v1/sessions/${clerkSessionId}`, {
+      const clerkResponse = await fetch(`https://api.clerk.com/v1/sessions/${clerkSessionId}`, {
         headers: {
-          'Authorization': `Bearer ${process.env.CLERK_SECRET_KEY}`
+          'Authorization': `Bearer ${process.env.CLERK_SECRET_KEY}`,
+          'Content-Type': 'application/json'
         }
       });
       
-      if (!clerkValidation.ok) {
-        return new Response("Invalid Clerk session", { 
+      if (!clerkResponse.ok) {
+        return new Response(JSON.stringify({ error: "Invalid Clerk session" }), {
           status: 401,
-          headers: corsHeaders
+          headers: { "Content-Type": "application/json" }
         });
       }
       
-      // Create extension-specific JWT token
-      const extensionToken = jwt.sign(
-        { 
-          sub: clerkUserId,
-          iss: 'chartilyze-extension',
-          aud: 'chartilyze-api',
-          exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24 hours
-          iat: Math.floor(Date.now() / 1000)
-        },
-        process.env.JWT_SECRET || 'your-jwt-secret'
-      );
+      const clerkSession = await clerkResponse.json();
+      
+      // Generate extension token (simple base64 encoding for now)
+      const extensionToken = {
+        userId: clerkUserId,
+        sessionId: clerkSessionId,
+        timestamp: Date.now(),
+      };
+      
+      const encodedToken = Buffer.from(JSON.stringify(extensionToken)).toString('base64');
       
       return new Response(JSON.stringify({ 
-        extensionToken,
-        expiresIn: 24 * 60 * 60
+        extensionToken: encodedToken
       }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+      
+    } catch (error) {
+      console.error('Extension token error:', error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+  })
+});
+
+// Stored session validation endpoint
+http.route({
+  path: "/auth/validate-stored-session",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json() as ValidateStoredSessionRequestBody;
+      const { sessionData } = body;
+      
+      // If we have cookie session data, try to validate it
+      if (sessionData.hasCookieSession && sessionData.cookies) {
+        // Find the session cookie
+        const sessionCookie = sessionData.cookies.find(cookie => 
+          cookie.name.includes('__session') || cookie.name.includes('clerk')
+        );
+        
+        if (sessionCookie) {
+          const extensionToken = {
+            source: 'cookie',
+            timestamp: Date.now(),
+            cookieData: sessionCookie.value
+          };
+          
+          const encodedToken = Buffer.from(JSON.stringify(extensionToken)).toString('base64');
+          
+          return new Response(JSON.stringify({ 
+            valid: true,
+            extensionToken: encodedToken
+          }), {
+            status: 200,
+            headers: { 
+              "Content-Type": "application/json",
+              ...corsHeaders
+            }
+          });
+        }
+      }
+      
+      // If we have stored session data from localStorage
+      if (sessionData.hasStoredSession) {
+        const extensionToken = {
+          source: 'stored',
+          timestamp: Date.now(),
+          storedData: sessionData.clerkData || sessionData.clerkSession
+        };
+        
+        const encodedToken = Buffer.from(JSON.stringify(extensionToken)).toString('base64');
+        
+        return new Response(JSON.stringify({ 
+          valid: true,
+          extensionToken: encodedToken
+        }), {
+          status: 200,
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders
+          }
+        });
+      }
+      
+      return new Response(JSON.stringify({ valid: false }), {
         status: 200,
         headers: { 
           "Content-Type": "application/json",
           ...corsHeaders
         }
       });
+      
     } catch (error) {
-      console.error('Extension token creation failed:', error);
-      return new Response("Token creation failed", { 
+      console.error('Session validation error:', error);
+      return new Response(JSON.stringify({ valid: false }), {
         status: 500,
-        headers: corsHeaders
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders
+        }
       });
     }
   })
 });
 
-// Add OPTIONS handler for the new endpoint
+// Add OPTIONS route for the validate-stored-session POST route
+http.route({
+  path: "/auth/validate-extension-token",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders
+    });
+  }),
+});
+
+// Add OPTIONS routes for other auth endpoints too
 http.route({
   path: "/auth/extension-token",
   method: "OPTIONS",
   handler: httpAction(async () => {
     return new Response(null, {
       status: 200,
-      headers: corsHeaders,
+      headers: corsHeaders
     });
   }),
 });
 
-// Validate extension token
+// REMOVE THIS DUPLICATE OPTIONS ROUTE (lines 622-632)
+// http.route({
+//   path: "/auth/validate-extension-token",
+//   method: "OPTIONS",
+//   handler: httpAction(async () => {
+//     return new Response(null, {
+//       status: 200,
+//       headers: corsHeaders
+//     });
+//   }),
+// });
+
+// Keep the POST route for validate-extension-token
 http.route({
   path: "/auth/validate-extension-token",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response("Missing authorization header", { 
-        status: 401,
-        headers: corsHeaders
-      });
-    }
-    
-    const token = authHeader.substring(7);
-    
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-jwt-secret') as jwt.JwtPayload;
+      const body = await request.json() as ValidateExtensionTokenRequestBody;
+      const { token } = body;
+      
+      // Decode and validate the extension token
+      const decodedToken = JSON.parse(Buffer.from(token, 'base64').toString());
+      
+      // Check if token is not too old (e.g., 24 hours)
+      const tokenAge = Date.now() - decodedToken.timestamp;
+      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+      
+      if (tokenAge > maxAge) {
+        return new Response(JSON.stringify({ valid: false, reason: 'Token expired' }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
       
       return new Response(JSON.stringify({ 
-        valid: true, 
-        userId: decoded.sub,
-        expiresAt: decoded.exp
+        valid: true,
+        userId: decodedToken.userId
       }), {
         status: 200,
-        headers: { 
-          "Content-Type": "application/json",
-          ...corsHeaders
-        }
+        headers: { "Content-Type": "application/json" }
       });
+      
     } catch (error) {
-      return new Response("Invalid token", { 
-        status: 401,
-        headers: corsHeaders
+      console.error('Token validation error:', error);
+      return new Response(JSON.stringify({ valid: false }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
       });
     }
   })
-});
-
-// Add OPTIONS handler for validation endpoint
-http.route({
-  path: "/auth/validate-extension-token",
-  method: "OPTIONS",
-  handler: httpAction(async () => {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }),
 });
 
 export default http;

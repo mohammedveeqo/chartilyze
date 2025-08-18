@@ -1,37 +1,42 @@
 {
   "manifest_version": 3,
-  "name": "Chartilyze AI Assistant",
+  "name": "Chartilyze Extension",
   "version": "1.0",
-  "description": "AI-powered trading assistant for TradingView",
-  "icons": {
-    "16": "public/icons/icon16.png",
-    "32": "public/icons/icon32.png",
-    "48": "public/icons/icon48.png",
-    "128": "public/icons/icon128.png"
-  },
+  "description": "AI-powered trading analysis for TradingView",
   "permissions": [
-    "identity",
-    "storage",
     "activeTab",
-    "sidePanel"
+    "storage",
+    "sidePanel",
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
-    "https://decisive-tapir-206.convex.site/*",
-    "https://your-chartilyze-domain.com/*"
+    "*://*/*",
+    "https://decisive-tapir-206.convex.site/*"
   ],
   "background": {
     "service_worker": "src/background.js"
   },
+  "content_scripts": [
+    {
+      "matches": ["*://*.tradingview.com/*"],
+      "js": ["src/content.js"]
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/chartilyze-auth.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "public/popup.html",
+    "default_title": "Chartilyze"
+  },
   "side_panel": {
     "default_path": "public/sidepanel.html"
   },
-  "action": {
-    "default_title": "Open Chartilyze Assistant"
-  },
-  "content_scripts": [
-    {
-      "matches": ["https://www.tradingview.com/*"],
-      "js": ["src/content.js"]
-    }
-  ]
+  "icons": {
+    "16": "public/icons/icon16.png",
+    "48": "public/icons/icon48.png",
+    "128": "public/icons/icon128.png"
+  }
 }
