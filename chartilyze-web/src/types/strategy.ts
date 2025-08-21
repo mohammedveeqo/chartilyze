@@ -1,6 +1,27 @@
 import type { Trade } from './trade'
 
-export type StrategyName = 'Breakout Scalping' | 'Swing Trading' | 'News Trading'
+// Flowchart Types (new)
+export interface FlowchartNode {
+  id: string;
+  name: string;
+  shape: 'oval' | 'rectangle' | 'diamond';
+  icon: string;
+  color: string;
+  group?: string;
+}
+
+export interface FlowchartGroup {
+  name: string;
+  icon: string;
+  color: string;
+  nodes: string[];
+}
+
+export interface FlowchartRelationship {
+  from: string;
+  to: string;
+  condition: string;
+}
 
 // Strategy Component interface for rule builder
 export interface StrategyComponent {
@@ -8,8 +29,8 @@ export interface StrategyComponent {
   type: 'rule' | 'condition' | 'action' | 'indicator_check' | 'pattern_match'
   name: string
   description: string
+  tags?: string[]
   
-  // Rule logic
   ruleType: 'entry_condition' | 'exit_condition' | 'risk_check' | 'confirmation'
   logic: {
     operator: 'AND' | 'OR' | 'NOT'
@@ -22,21 +43,54 @@ export interface StrategyComponent {
     }>
   }
   
-  // Actions when rule is triggered
   actions?: Array<{
     type: 'enter_long' | 'enter_short' | 'exit_position' | 'set_stop_loss' | 'take_profit'
     parameters: Record<string, any>
   }>
   
-  // Flow connections
-  nextRules?: string[] // IDs of rules to evaluate next
-  parentRules?: string[] // Rules that must be true before this one
+  nextRules?: string[]
+  parentRules?: string[]
   
   confidence: number
   priority: 'high' | 'medium' | 'low'
 }
 
-// New structured rule interface
+// Enhanced strategy interface with flowchart
+export interface Strategy {
+  pairs: string[]
+  rules: string[]
+  structuredRules?: StructuredRule[]
+  tags?: string[]
+  trades: Trade[]
+  color: string
+  description?: string
+  flowchart?: {
+    nodes: FlowchartNode[]
+    groups: FlowchartGroup[]
+    relationships: FlowchartRelationship[]
+  }
+}
+
+// Updated form data to include flowchart
+export interface StrategyFormData {
+  name: string
+  pairs: string
+  rules: string
+  color: string
+  description: string
+  structuredRules: StructuredRule[]
+  tags: string[]
+  flowchart?: {
+    nodes: FlowchartNode[]
+    groups: FlowchartGroup[]
+    relationships: FlowchartRelationship[]
+  }
+}
+
+// Keep your existing types
+export type StrategyName = 'Breakout Scalping' | 'Swing Trading' | 'News Trading'
+export type StrategiesRecord = Record<StrategyName, Strategy>
+
 export interface StructuredRule {
   id: string
   pattern?: string
@@ -51,26 +105,18 @@ export interface StructuredRule {
   confidence?: number
 }
 
-// Enhanced strategy interface
-export interface Strategy {
-  pairs: string[]
-  rules: string[] // Keep for backward compatibility
-  structuredRules?: StructuredRule[] // New structured rules
-  tags?: string[] // Auto-generated tags
-  trades: Trade[]
-  color: string
-  description?: string // Free-form description
-}
-
-// Updated form data for new flow
-export interface StrategyFormData {
+// New type for strategy data state in modal
+export interface StrategyDataState {
   name: string
-  pairs: string
-  rules: string
+  originalDescription: string
+  description: string
+  pairs: string[]
+  components: StrategyComponent[]
+  flowchart: {
+    nodes: FlowchartNode[]
+    groups: FlowchartGroup[]
+    relationships: FlowchartRelationship[]
+  }
+  globalTags: string[]
   color: string
-  description: string // Natural language description
-  structuredRules: StructuredRule[]
-  tags: string[]
 }
-
-export type StrategiesRecord = Record<StrategyName, Strategy>

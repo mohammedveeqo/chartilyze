@@ -37,7 +37,8 @@ const useStrategyStore = create<StrategyStore>((set) => ({
 export const useStrategies = () => {
   const journalsData = useQuery(api.journals.getUserJournals)
   
-  if (!journalsData?.journals) {
+  // Early return for loading state
+  if (!journalsData) {
     return {
       strategies: [],
       isLoading: true,
@@ -45,15 +46,15 @@ export const useStrategies = () => {
     }
   }
 
-  const strategies: StrategyFromJournal[] = journalsData.journals
-    .filter(journal => journal.strategy) // Only journals with strategies
+  const strategies: StrategyFromJournal[] = (journalsData.journals || [])
+    .filter(journal => journal?.strategy) // Add null check
     .map(journal => ({
       id: journal._id,
-      name: journal.strategy!.name,
+      name: journal.strategy!.name || 'Untitled Strategy',
       description: journal.description,
       rules: journal.strategy!.rules || [],
-      components: journal.strategy!.components,
-      globalTags: journal.strategy!.globalTags,
+      components: journal.strategy!.components || [],
+      globalTags: journal.strategy!.globalTags || [],
       complexity: journal.strategy!.complexity,
       riskProfile: journal.strategy!.riskProfile,
       journalId: journal._id,
@@ -68,14 +69,17 @@ export const useStrategies = () => {
 }
 
 // Hook to get current strategy data
+// Hook to get current strategy data
 export const useCurrentStrategy = () => {
   const { currentStrategyId, setCurrentStrategy } = useStrategyStore()
   const { strategies, isLoading } = useStrategies()
   
-  // Auto-select first strategy if none selected and strategies exist
-  if (!currentStrategyId && strategies.length > 0 && !isLoading) {
-    setCurrentStrategy(strategies[0].id) // ❌ This causes setState during render!
-  }
+  // Move auto-selection to useEffect
+  useEffect(() => {
+    if (!currentStrategyId && strategies.length > 0 && !isLoading) {
+      setCurrentStrategy(strategies[0].id)
+    }
+  }, [currentStrategyId, strategies, isLoading, setCurrentStrategy])
   
   const currentStrategy = strategies.find(s => s.id === currentStrategyId)
   
@@ -89,16 +93,31 @@ export const useCurrentStrategy = () => {
 // Main hook for backward compatibility
 export const useStrategy = () => {
   const store = useStrategyStore()
-  const { strategies } = useStrategies()
+  const { strategies, isLoading } = useStrategies()
   const { currentStrategy } = useCurrentStrategy()
   
+  // Handle loading state
+  if (isLoading) {
+    return {
+      currentStrategy: '',
+      editingStrategy: null,
+      strategies: {},
+      setCurrentStrategy: () => {},
+      setEditingStrategy: () => {},
+      updateStrategy: () => {},
+      allStrategies: [],
+      currentStrategyData: null,
+      isLoading: true
+    }
+  }
+
   // Convert to old format for backward compatibility
   const strategiesRecord = strategies.reduce((acc, strategy) => {
     acc[strategy.name] = {
-      pairs: [], // You might want to add pairs to your schema
+      pairs: [],
       rules: strategy.rules,
-      color: 'blue', // Default color, you might want to add this to schema
-      trades: [] // Trades are separate in your schema
+      color: 'blue',
+      trades: []
     }
     return acc
   }, {} as Record<string, any>)
@@ -114,10 +133,10 @@ export const useStrategy = () => {
       }
     },
     setEditingStrategy: store.setEditingStrategy,
-    updateStrategy: () => {}, // This would need to be implemented with Convex mutations
-    // New methods for the updated system
+    updateStrategy: () => {},
     allStrategies: strategies,
-    currentStrategyData: currentStrategy
+    currentStrategyData: currentStrategy,
+    isLoading: false
   }
 }
 

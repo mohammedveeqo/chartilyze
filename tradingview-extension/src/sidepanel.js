@@ -1,3 +1,5 @@
+import AuthManager from './auth.js';
+
 class ChartilyzeAssistant {
     constructor() {
         console.log('🚀 ChartilyzeAssistant constructor started');
@@ -8,8 +10,12 @@ class ChartilyzeAssistant {
         this.backendUrl = 'https://decisive-tapir-206.convex.site';
         
         try {
-            console.log('🔧 Creating AuthManager instance...');
-            this.authManager = new AuthManager();
+// Around line 13-14, replace the AuthManager creation with:
+console.log('🔧 Creating AuthManager instance...');
+this.authManager = new AuthManager({
+    webAppUrl: 'http://localhost:3000',
+    backendUrl: 'https://decisive-tapir-206.convex.site'
+});
             console.log('✅ AuthManager created successfully');
         } catch (error) {
             console.error('❌ Failed to create AuthManager:', error);
@@ -175,28 +181,16 @@ showAuthenticationError() {
     }
 
 async getUserToken() {
-    // Try to get token from the main web app tab
-    return new Promise((resolve, reject) => {
-        chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
-            if (tabs && tabs[0]) {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'GET_USER_TOKEN'}, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.error('Error getting user token:', chrome.runtime.lastError);
-                        reject(new Error('Failed to communicate with web app tab'));
-                    } else if (response && response.success && response.token) {
-                        console.log('Successfully retrieved token from web app');
-                        resolve(response.token);
-                    } else {
-                        console.error('No valid token received from web app:', response);
-                        reject(new Error('No authentication found. Please make sure you are logged in to Chartilyze.'));
-                    }
-                });
-            } else {
-                console.error('No active tab found');
-                reject(new Error('No active tab found. Please open Chartilyze in another tab.'));
-            }
-        });
-    });
+    // Use AuthManager's built-in token management instead of tab communication
+    try {
+        console.log('🔑 Getting token from AuthManager...');
+        const token = await this.authManager.getValidToken();
+        console.log('✅ Successfully retrieved token from AuthManager');
+        return token;
+    } catch (error) {
+        console.error('❌ Failed to get token from AuthManager:', error);
+        throw new Error('No authentication found. Please make sure you are logged in to Chartilyze.');
+    }
 }
 
     renderStrategyList() {
@@ -503,17 +497,52 @@ I'll then show you the specific workflow for your active strategy with:
         });
     }
 
-    showWelcomeMessage() {
-        // Show a simple notification that the assistant is ready
-        const notification = document.createElement('div');
-        notification.className = 'success-notification';
-        notification.textContent = 'Assistant ready. Use the buttons above for quick workflows.';
-        this.messagesContainer.appendChild(notification);
-        
-        // Remove notification after 3 seconds
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
+    async showWelcomeMessage() {
+        try {
+            // Get user token
+            const userToken = await this.getUserToken();
+            
+            // Fetch user info from backend
+            const response = await fetch(`${this.backendUrl}/extension/user-info`, {
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            let userName = "Trader";
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('User data:', data);
+                userName = data.user?.name || "Trader";
+            }
+            
+            // Show a personalized welcome message
+            const notification = document.createElement('div');
+            notification.className = 'success-notification';
+            notification.textContent = `Hi ${userName}, how can I help you today?`;
+            this.messagesContainer.appendChild(notification);
+            
+            // Add a message to the chat
+            this.addSystemMessage(`Welcome ${userName}! I'm your Chartilyze Assistant. How can I help with your trading today?`);
+            
+            // Remove notification after 3 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        } catch (error) {
+            console.error('Failed to load user info:', error);
+            // Fallback to generic welcome message
+            const notification = document.createElement('div');
+            notification.className = 'success-notification';
+            notification.textContent = 'Assistant ready. Use the buttons above for quick workflows.';
+            this.messagesContainer.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
     }
 
     handleInputChange() {
@@ -640,7 +669,16 @@ I'll then show you the specific workflow for your active strategy with:
         }
     }
 
-    // Remove the old generateResponse method as it's no longer needed
+    addSystemMessage(text) {
+        const message = {
+            role: 'system',
+            content: text
+        };
+        
+        this.messages.push(message);
+        this.renderMessage(message);
+        this.conversationHistory.push(message);
+    }
 
     generateResponse(message, chartData) {
         // Simple response generation based on keywords
@@ -797,8 +835,15 @@ I'll then show you the specific workflow for your active strategy with:
             this.authLoading.style.display = 'flex';
             this.authError.style.display = 'none';
             
-            // Attempt sign in
-            await this.authManager.signIn();
+            // Attempt sign in with timeout
+            const signInPromise = this.authManager.signIn();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Sign-in timeout after 60 seconds')), 60000)
+            );
+            
+            const result = await Promise.race([signInPromise, timeoutPromise]);
+            
+            console.log('✅ Sign-in successful:', result);
             
             // Success - switch to main UI
             this.showMainUI();
@@ -807,10 +852,20 @@ I'll then show you the specific workflow for your active strategy with:
             this.showWelcomeMessage();
             
         } catch (error) {
-            console.error('Sign in failed:', error);
+            console.error('❌ Sign in failed:', error);
             
-            // Show error message
-            this.authError.textContent = error.message || 'Sign in failed. Please try again.';
+            // Show specific error messages
+            let errorMessage = 'Sign in failed. Please try again.';
+            
+            if (error.message.includes('timeout')) {
+                errorMessage = 'Sign-in timed out. Please check your connection and try again.';
+            } else if (error.message.includes('tab closed')) {
+                errorMessage = 'Sign-in was cancelled. Please try again.';
+            } else if (error.message.includes('token')) {
+                errorMessage = 'Authentication token error. Please try signing in again.';
+            }
+            
+            this.authError.textContent = errorMessage;
             this.authError.style.display = 'block';
             
         } finally {

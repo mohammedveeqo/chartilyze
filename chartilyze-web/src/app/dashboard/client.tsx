@@ -131,7 +131,7 @@ export default function DashboardClient() {
       {/* Welcome Modal for new users */}
       {showWelcomeModal && (
         <StrategyModal 
-          isCreatingNew={true} 
+          isCreatingNew={true}
           onClose={() => setShowWelcomeModal(false)}
           isWelcomeFlow={true}
         />

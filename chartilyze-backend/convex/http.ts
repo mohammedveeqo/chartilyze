@@ -2,13 +2,11 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-// Remove this line:
-// import jwt from 'jsonwebtoken';
+
 
 const http = httpRouter();
 
-
-// Type definitions for request bodies
+// Type definitions
 interface ChatRequestBody {
   message: string;
   strategyContext?: any;
@@ -30,14 +28,12 @@ interface AnalyzeRequestBody {
   analysisType?: string;
 }
 
-// Add type definition for extension token request
 interface ExtensionTokenRequestBody {
   clerkSessionId: string;
   clerkUserId: string;
   clerkToken?: string;
 }
 
-// Add these new interfaces
 interface ValidateStoredSessionRequestBody {
   sessionData: {
     hasCookieSession?: boolean;
@@ -52,14 +48,162 @@ interface ValidateExtensionTokenRequestBody {
   token: string;
 }
 
-// CORS headers for browser extension
+interface ClerkErrorResponse {
+  status: number;
+  error: string;
+  userMessage: string;
+}
+
+interface AuthError extends Error {
+  code?: string;
+  status?: number;
+  details?: any;
+}
+
+interface TokenValidationResult {
+  valid: boolean;
+  error?: string;
+  data?: {
+    userId: string;
+    type: 'clerk' | 'localStorage';
+    sessionId: string;
+    [key: string]: any;
+  };
+}
+
+interface RefreshTokenRequestBody {
+  refreshToken: string;
+}
+
+// Constants
+const TOKEN_SECRET = process.env.TOKEN_SECRET || 'fallback-secret-key';
+const TOKEN_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+const REFRESH_TOKEN_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization"
 };
 
-// Handle preflight requests
+// Utility Functions
+const logAuthEvent = (
+  event: string, 
+  details: Record<string, any>, 
+  level: 'info' | 'warn' | 'error' = 'info'
+) => {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    event,
+    level,
+    ...details
+  };
+  
+  if (details.error instanceof Error) {
+    logEntry.error = {
+      message: details.error.message,
+      name: details.error.name,
+      stack: details.error.stack
+    };
+  }
+  
+  console.log(`[AUTH-${level.toUpperCase()}]`, JSON.stringify(logEntry, null, 2));
+};
+
+const createSecureToken = (payload: any, expiresIn: number = TOKEN_EXPIRY) => {
+  const tokenData = {
+    ...payload,
+    timestamp: Date.now(),
+    expiresAt: Date.now() + expiresIn,
+    nonce: crypto.randomBytes(16).toString('hex')
+  };
+  
+  const tokenString = JSON.stringify(tokenData);
+  const signature = crypto.createHmac('sha256', TOKEN_SECRET)
+    .update(tokenString)
+    .digest('hex');
+  
+  const secureToken = {
+    data: tokenString,
+    signature
+  };
+  
+  return Buffer.from(JSON.stringify(secureToken)).toString('base64');
+};
+
+const validateSecureToken = (token: string): TokenValidationResult => {
+  try {
+    const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
+    
+    if (!decoded.data || !decoded.signature) {
+      return {
+        valid: false,
+        error: 'Invalid token structure'
+      };
+    }
+    
+    const expectedSignature = crypto.createHmac('sha256', TOKEN_SECRET)
+      .update(decoded.data)
+      .digest('hex');
+    
+    if (decoded.signature !== expectedSignature) {
+      return {
+        valid: false,
+        error: 'Invalid token signature'
+      };
+    }
+    
+    const tokenData = JSON.parse(decoded.data);
+    
+    if (Date.now() > tokenData.expiresAt) {
+      return {
+        valid: false,
+        error: 'Token expired'
+      };
+    }
+    
+    return { 
+      valid: true, 
+      data: tokenData 
+    };
+  } catch (err) {
+    const error = err as Error;
+    return { 
+      valid: false, 
+      error: error.message || 'Token validation failed'
+    };
+  }
+};
+
+const handleClerkError = (response: Response, context: string): ClerkErrorResponse => {
+  const errorMessages: Record<number, string> = {
+    400: 'Invalid request parameters',
+    401: 'Invalid or expired Clerk session',
+    403: 'Insufficient permissions',
+    404: 'Session not found',
+    429: 'Rate limit exceeded',
+    500: 'Clerk service unavailable'
+  };
+  
+  const message = errorMessages[response.status] || 'Unknown Clerk API error';
+  
+  logAuthEvent('clerk_api_error', {
+    context,
+    status: response.status,
+    message,
+    url: response.url
+  }, 'error');
+  
+  return {
+    error: message,
+    status: response.status,
+    userMessage: response.status === 401 
+      ? 'Your session has expired. Please sign in again.'
+      : 'Authentication service temporarily unavailable. Please try again.'
+  };
+};
+// OPTIONS Routes
 http.route({
   path: "/extension/chat",
   method: "OPTIONS",
@@ -93,7 +237,6 @@ http.route({
   }),
 });
 
-// Add OPTIONS handler for strategies endpoint
 http.route({
   path: "/extension/strategies",
   method: "OPTIONS",
@@ -105,86 +248,113 @@ http.route({
   }),
 });
 
-// Add strategies endpoint before the health endpoint
 http.route({
-  path: "/extension/strategies",
-  method: "GET",
-  // In the /extension/strategies route
-  handler: httpAction(async (ctx, request) => {
-      // In the GET /extension/strategies handler:
-      const authHeader = request.headers.get("Authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response("Authentication required", { status: 401 });
-      }
-      
-      const token = authHeader.replace("Bearer ", "");
-      
-      try {
-          // Validate the JWT token and get user identity
-          // For HTTP actions, we need to verify the token manually
-          // since ctx.auth is not available in HTTP actions
-          
-          // For now, let's extract the userId from the token
-          // This is a simplified approach - in production you'd want proper JWT validation
-          let userId;
-          
-          try {
-              // Try to decode the JWT token to get the user ID
-              const payload = JSON.parse(atob(token.split('.')[1]));
-              userId = payload.sub; // 'sub' is the standard JWT claim for user ID
-          } catch (e) {
-              // If JWT parsing fails, treat the token as a direct userId (fallback)
-              userId = token;
-          }
-          
-          if (!userId) {
-              return new Response("Invalid token", { status: 401 });
-          }
-          
-          console.log('Extension request for user:', userId);
-          
-          const journals = await ctx.runQuery(api.journals.getJournalsByUserId, { userId });
-          if (!journals) {
-            return new Response(
-              JSON.stringify({ strategies: [] }),
-              {
-                status: 200,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
-          }
-  
-          // Transform journals into strategy format for extension
-          const strategies = journals
-            .filter(journal => journal.strategy) // Only journals with strategies
-            .map(journal => ({
-              id: journal._id,
-              name: journal.strategy?.name || 'Unnamed Strategy',
-              description: journal.description,
-              rules: journal.strategy?.rules || [],
-              components: journal.strategy?.components,
-              globalTags: journal.strategy?.globalTags,
-              complexity: journal.strategy?.complexity,
-              riskProfile: journal.strategy?.riskProfile,
-              journalId: journal._id,
-              journalName: journal.name
-            }));
-  
-          return new Response(
-            JSON.stringify({ strategies }),
-            {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-      } catch (error) {
-        console.error('Error fetching strategies:', error);
-        return new Response("Internal server error", { status: 500 });
-      }
+  path: "/auth/extension-token",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 200,
+      headers: corsHeaders
+    });
   }),
 });
 
-// Chat endpoint for extension
+// Health Check Endpoint
+http.route({
+  path: "/extension/health",
+  method: "GET",
+  handler: httpAction(async () => {
+    return new Response(
+      JSON.stringify({ 
+        status: "healthy", 
+        timestamp: new Date().toISOString(),
+        service: "chartilyze-extension-api"
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }),
+});
+
+// Basic Auth Extension Endpoint
+http.route({
+  path: "/auth/extension",
+  method: "GET", 
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const redirectUri = url.searchParams.get("redirect_uri");
+    
+    if (!redirectUri) {
+      return new Response("Missing redirect_uri", { status: 400 });
+    }
+    
+    const loginUrl = `https://your-chartilyze-domain.com/login?extension=true&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    
+    return new Response(null, {
+      status: 302,
+      headers: {
+        "Location": loginUrl
+      }
+    });
+  })
+});
+
+http.route({
+  path: "/extension/strategies",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response("Authentication required", { status: 401 });
+    }
+    
+    const token = authHeader.replace("Bearer ", "");
+    
+    try {
+      let userId;
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        userId = payload.sub;
+      } catch (e) {
+        userId = token;
+      }
+      
+      if (!userId) {
+        return new Response("Invalid token", { status: 401 });
+      }
+      
+      console.log('Extension request for user:', userId);
+      
+      const journals = await ctx.runQuery(api.journals.getJournalsByUserId, { userId });
+      if (!journals) {
+        return new Response(
+          JSON.stringify({ strategies: [] }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Filter journals to only include those with strategies (like the web app does)
+      const strategies = journals
+        .filter(journal => journal?.strategy) // Add this filter line
+        .map(journal => ({
+          id: journal._id,
+          name: journal.strategy!.name || journal.name || 'Untitled Journal',
+          description: journal.description,
+          rules: journal.strategy!.rules || [],
+          components: journal.strategy!.components || [],
+          globalTags: journal.strategy!.globalTags || [],
+          complexity: journal.strategy!.complexity || 'simple',
+          riskProfile: journal.strategy!.riskProfile || 'moderate',
+          journalId: journal._id,
+          journalName: journal.name
+        }));
+
+// Chat Endpoint
 http.route({
   path: "/extension/chat",
   method: "POST",
@@ -203,7 +373,6 @@ http.route({
         );
       }
 
-      // Call the existing chatWithStrategy action
       const response = await ctx.runAction(api.aiStrategy.chatWithStrategy, {
         message,
         strategyContext,
@@ -230,21 +399,14 @@ http.route({
   }),
 });
 
-// Journal creation endpoint
+// Journal Endpoint
 http.route({
   path: "/extension/journal",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json() as JournalRequestBody;
-      const { 
-        name, 
-        description, 
-        strategy, 
-        settings, 
-        userId,
-        chartData 
-      } = body;
+      const { name, description, strategy, settings, userId, chartData } = body;
 
       if (!name || !userId) {
         return new Response(
@@ -256,7 +418,6 @@ http.route({
         );
       }
 
-      // Create journal entry with chart data
       const journalData = {
         name,
         description: description || `Journal entry created from TradingView - ${new Date().toLocaleString()}`,
@@ -265,7 +426,6 @@ http.route({
           defaultRiskPercentage: 2,
           defaultPositionSize: 1000,
         },
-        // Add chart data if provided
         ...(chartData && {
           metadata: {
             source: "tradingview-extension",
@@ -275,8 +435,6 @@ http.route({
         })
       };
 
-      // Note: For development, we'll store without authentication
-      // In production, you'd want to validate the userId
       const journalId = await ctx.runMutation(api.journals.create, journalData);
 
       return new Response(
@@ -306,7 +464,7 @@ http.route({
   }),
 });
 
-// Chart analysis endpoint
+// Analyze Endpoint
 http.route({
   path: "/extension/analyze",
   method: "POST",
@@ -328,24 +486,20 @@ http.route({
       let response;
       
       if (analysisType === "trade") {
-        // Use the existing trade analysis action
         response = await ctx.runAction(api.aiStrategy.analyzeTradeImage, {
           imageBase64,
           prompt: prompt || "Analyze this trading chart",
         });
       } else if (analysisType === "ocr") {
-        // First extract text using Mistral OCR, then analyze with DeepSeek
         const ocrResult = await ctx.runAction(api.aiStrategy.testMistralOCR, {
           imageBase64,
         });
         
-        // Then analyze the extracted text
         response = await ctx.runAction(api.aiStrategy.analyzeOCRText, {
           extractedText: ocrResult.extractedText,
           prompt: prompt || "Analyze this trading chart data",
         });
       } else {
-        // Default to trade analysis
         response = await ctx.runAction(api.aiStrategy.analyzeTradeImage, {
           imageBase64,
           prompt: prompt || "Analyze this trading chart",
@@ -372,51 +526,6 @@ http.route({
   }),
 });
 
-// Health check endpoint
-http.route({
-  path: "/extension/health",
-  method: "GET",
-  handler: httpAction(async () => {
-    return new Response(
-      JSON.stringify({ 
-        status: "healthy", 
-        timestamp: new Date().toISOString(),
-        service: "chartilyze-extension-api"
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }),
-});
-
-// Add this new endpoint
-http.route({
-  path: "/auth/extension",
-  method: "GET", 
-  handler: httpAction(async (ctx, request) => {
-    const url = new URL(request.url);
-    const redirectUri = url.searchParams.get("redirect_uri");
-    
-    if (!redirectUri) {
-      return new Response("Missing redirect_uri", { status: 400 });
-    }
-    
-    // Redirect to your web app's login page with extension context
-    const loginUrl = `https://your-chartilyze-domain.com/login?extension=true&redirect_uri=${encodeURIComponent(redirectUri)}`;
-    
-    return new Response(null, {
-      status: 302,
-      headers: {
-        "Location": loginUrl
-      }
-    });
-  })
-});
-
-// Add token verification endpoint
-// Fix the JWT usage in the auth/verify endpoint
 http.route({
   path: "/auth/verify",
   method: "GET",
@@ -429,13 +538,12 @@ http.route({
     }
     
     try {
-      // Decode base64 token instead of JWT
       let userId;
       try {
         const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf-8'));
         userId = decoded?.userId;
       } catch (decodeError) {
-        userId = token; // Fallback
+        userId = token;
       }
       
       if (!userId) {
@@ -449,7 +557,6 @@ http.route({
           ...corsHeaders
         }
       });
-      
     } catch (error) {
       console.error('Token verification error:', error);
       return new Response("Invalid token", { 
@@ -460,61 +567,7 @@ http.route({
   })
 });
 
-// Add these new endpoints after the existing auth endpoints
-
-// Extension token conversion endpoint
-http.route({
-  path: "/auth/extension-token",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    try {
-      const body = await request.json() as ExtensionTokenRequestBody;
-      const { clerkSessionId, clerkUserId } = body;
-      
-      // Validate the Clerk session with Clerk's API
-      const clerkResponse = await fetch(`https://api.clerk.com/v1/sessions/${clerkSessionId}`, {
-        headers: {
-          'Authorization': `Bearer ${process.env.CLERK_SECRET_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!clerkResponse.ok) {
-        return new Response(JSON.stringify({ error: "Invalid Clerk session" }), {
-          status: 401,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-      
-      const clerkSession = await clerkResponse.json();
-      
-      // Generate extension token (simple base64 encoding for now)
-      const extensionToken = {
-        userId: clerkUserId,
-        sessionId: clerkSessionId,
-        timestamp: Date.now(),
-      };
-      
-      const encodedToken = Buffer.from(JSON.stringify(extensionToken)).toString('base64');
-      
-      return new Response(JSON.stringify({ 
-        extensionToken: encodedToken
-      }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-      
-    } catch (error) {
-      console.error('Extension token error:', error);
-      return new Response(JSON.stringify({ error: "Internal server error" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-  })
-});
-
-// Stored session validation endpoint
+// Stored Session Validation Endpoint
 http.route({
   path: "/auth/validate-stored-session",
   method: "POST",
@@ -523,9 +576,7 @@ http.route({
       const body = await request.json() as ValidateStoredSessionRequestBody;
       const { sessionData } = body;
       
-      // If we have cookie session data, try to validate it
       if (sessionData.hasCookieSession && sessionData.cookies) {
-        // Find the session cookie
         const sessionCookie = sessionData.cookies.find(cookie => 
           cookie.name.includes('__session') || cookie.name.includes('clerk')
         );
@@ -552,7 +603,6 @@ http.route({
         }
       }
       
-      // If we have stored session data from localStorage
       if (sessionData.hasStoredSession) {
         const extensionToken = {
           source: 'stored',
@@ -581,7 +631,6 @@ http.route({
           ...corsHeaders
         }
       });
-      
     } catch (error) {
       console.error('Session validation error:', error);
       return new Response(JSON.stringify({ valid: false }), {
@@ -595,81 +644,266 @@ http.route({
   })
 });
 
-// Add OPTIONS route for the validate-stored-session POST route
-http.route({
-  path: "/auth/validate-extension-token",
-  method: "OPTIONS",
-  handler: httpAction(async () => {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders
-    });
-  }),
-});
-
-// Add OPTIONS routes for other auth endpoints too
-http.route({
-  path: "/auth/extension-token",
-  method: "OPTIONS",
-  handler: httpAction(async () => {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders
-    });
-  }),
-});
-
-// REMOVE THIS DUPLICATE OPTIONS ROUTE (lines 622-632)
-// http.route({
-//   path: "/auth/validate-extension-token",
-//   method: "OPTIONS",
-//   handler: httpAction(async () => {
-//     return new Response(null, {
-//       status: 200,
-//       headers: corsHeaders
-//     });
-//   }),
-// });
-
-// Keep the POST route for validate-extension-token
+// Extension Token Validation Endpoint
 http.route({
   path: "/auth/validate-extension-token",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const requestId = crypto.randomUUID();
+    
     try {
       const body = await request.json() as ValidateExtensionTokenRequestBody;
       const { token } = body;
       
-      // Decode and validate the extension token
-      const decodedToken = JSON.parse(Buffer.from(token, 'base64').toString());
-      
-      // Check if token is not too old (e.g., 24 hours)
-      const tokenAge = Date.now() - decodedToken.timestamp;
-      const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-      
-      if (tokenAge > maxAge) {
-        return new Response(JSON.stringify({ valid: false, reason: 'Token expired' }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" }
+      if (!token) {
+        logAuthEvent('token_validation_failed', {
+          requestId,
+          reason: 'Missing token'
+        }, 'warn');
+        
+        return new Response(JSON.stringify({ 
+          valid: false, 
+          reason: 'Missing token' 
+        }), {
+          status: 400,
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders 
+          }
         });
       }
+
+      const validation = validateSecureToken(token);
+      
+      if (!validation.valid) {
+        logAuthEvent('token_validation_failed', {
+          requestId,
+          reason: validation.error
+        }, 'warn');
+        
+        return new Response(JSON.stringify({ 
+          valid: false, 
+          reason: validation.error,
+          userMessage: 'Session expired. Please sign in again.'
+        }), {
+          status: 200,
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders 
+          }
+        });
+      }
+
+      logAuthEvent('token_validation_success', {
+        requestId,
+        userId: validation.data?.userId,
+        tokenType: validation.data?.type
+      }, 'info');
       
       return new Response(JSON.stringify({ 
         valid: true,
-        userId: decodedToken.userId
+        userId: validation.data?.userId,
+        sessionId: validation.data?.sessionId,
+        tokenType: validation.data?.type
       }), {
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders 
+        }
       });
+    } catch (err) {
+      const error = err as AuthError;
       
-    } catch (error) {
-      console.error('Token validation error:', error);
-      return new Response(JSON.stringify({ valid: false }), {
+      logAuthEvent('token_validation_error', {
+        requestId,
+        error: error.message || 'Unknown error',
+        code: error.code,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }, 'error');
+      
+      return new Response(JSON.stringify({ 
+        valid: false,
+        userMessage: "Authentication error. Please try again.",
+        details: process.env.NODE_ENV === 'development' ? {
+          message: error.message,
+          code: error.code
+        } : undefined
+      }), {
         status: 500,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders 
+        }
       });
     }
   })
+});
+
+// Extension Token Creation Endpoint
+http.route({
+  path: "/auth/extension-token",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json() as ExtensionTokenRequestBody;
+      const { clerkSessionId, clerkUserId, clerkToken } = body;
+      
+      if (clerkSessionId === 'localStorage-session') {
+        if (!clerkToken || !clerkUserId) {
+          return new Response(JSON.stringify({ 
+            error: "Invalid localStorage session data" 
+          }), {
+            status: 401,
+            headers: { 
+              "Content-Type": "application/json",
+              ...corsHeaders 
+            }
+          });
+        }
+
+        const extensionToken = createSecureToken({
+          userId: clerkUserId,
+          type: 'localStorage',
+          sessionId: clerkSessionId,
+          originalToken: clerkToken
+        });
+
+        return new Response(JSON.stringify({ 
+          extensionToken,
+          userId: clerkUserId
+        }), {
+          status: 200,
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders 
+          }
+        });
+      }
+
+      // Handle regular Clerk sessions
+      const clerkResponse = await fetch(`https://api.clerk.com/v1/sessions/${clerkSessionId}`, {
+        headers: {
+          'Authorization': `Bearer ${process.env.CLERK_SECRET_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!clerkResponse.ok) {
+        const error = handleClerkError(clerkResponse, 'extension-token');
+        return new Response(JSON.stringify(error), {
+          status: error.status,
+          headers: { 
+            "Content-Type": "application/json",
+            ...corsHeaders 
+          }
+        });
+      }
+
+      const extensionToken = createSecureToken({
+        userId: clerkUserId,
+        type: 'clerk',
+        sessionId: clerkSessionId
+      });
+
+      return new Response(JSON.stringify({ 
+        extensionToken,
+        userId: clerkUserId
+      }), {
+        status: 200,
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders 
+        }
+      });
+    } catch (err) {
+      const error = err as AuthError;
+      
+      logAuthEvent('extension_token_error', {
+        error: error.message || 'Unknown error',
+        stack: error.stack,
+        code: error.code,
+        details: error.details
+      }, 'error');
+
+      return new Response(JSON.stringify({ 
+        error: "Internal server error",
+        userMessage: "Authentication failed. Please try again.",
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      }), {
+        status: 500,
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders 
+        }
+      });
+    }
+  })
+});
+
+// Add this after the other extension endpoints
+http.route({
+  path: "/extension/user-info",
+  method: "OPTIONS",
+  handler: httpAction(async () => {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders
+    });
+  }),
+});
+
+http.route({
+  path: "/extension/user-info",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response("Authentication required", { status: 401 });
+    }
+    
+    const token = authHeader.replace("Bearer ", "");
+    
+    try {
+      let userId;
+      try {
+        const payload = JSON.parse(atob(token.split('.').[1]));
+        userId = payload.sub;
+      } catch (e) {
+        userId = token;
+      }
+      
+      if (!userId) {
+        return new Response("Invalid token", { status: 401 });
+      }
+      
+      // Get user information
+      const user = await ctx.runQuery(api.users.getUserById, { userId });
+      
+      return new Response(
+        JSON.stringify({ 
+          user: {
+            id: userId,
+            name: user?.name || "Trader",
+            email: user?.email
+          }
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+      return new Response(
+        JSON.stringify({ error: "Failed to fetch user information" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+  }),
 });
 
 export default http;

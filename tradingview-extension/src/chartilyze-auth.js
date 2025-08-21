@@ -1,36 +1,47 @@
-// chartilyze-auth.js - Runs ONLY on your Chartilyze web app
+// chartilyze-auth.js - Universal auth detection for sidepanel
 (function() {
-    console.log('Chartilyze auth detection script loaded');
+    console.log('Chartilyze universal auth detection script loaded on:', window.location.hostname);
     
     // Function to check and notify extension of Clerk auth
-    function notifyExtensionOfAuth() {
-        console.log('Checking for Clerk session...');
+    async function notifyExtensionOfAuth() {
+        console.log('🔍 Checking for Clerk session...');
         
         if (window.Clerk && window.Clerk.session) {
-            console.log('Found active Clerk session, notifying extension');
+            console.log('✅ Found active Clerk session, notifying extension');
             
             const clerkData = {
                 sessionId: window.Clerk.session.id,
                 userId: window.Clerk.user.id,
-                // Try different ways of getting a token
+                domain: window.location.hostname,
                 token: null
             };
             
-            // Try to get token using getToken method
+            // Try to get token using getToken method - PROPERLY AWAIT
             if (typeof window.Clerk.session.getToken === 'function') {
                 try {
-                    // Try with convex template first
-                    clerkData.token = window.Clerk.session.getToken({ template: 'convex' });
+                    console.log('🔑 Attempting to get Clerk token with convex template...');
+                    // Try with convex template first - AWAIT THIS
+                    clerkData.token = await window.Clerk.session.getToken({ template: 'convex' });
+                    console.log('✅ Got token with convex template');
                 } catch (e) {
-                    console.log('Error getting token with template:', e);
+                    console.log('⚠️ Error getting token with template:', e);
                     try {
-                        // Fallback to no template
-                        clerkData.token = window.Clerk.session.getToken();
+                        console.log('🔑 Attempting to get Clerk token without template...');
+                        // Fallback to no template - AWAIT THIS TOO
+                        clerkData.token = await window.Clerk.session.getToken();
+                        console.log('✅ Got token without template');
                     } catch (e2) {
-                        console.log('Error getting any token:', e2);
+                        console.log('❌ Error getting any token:', e2);
                     }
                 }
             }
+            
+            console.log('📤 Sending Clerk data to extension:', {
+                sessionId: clerkData.sessionId,
+                userId: clerkData.userId,
+                hasToken: !!clerkData.token,
+                domain: clerkData.domain
+            });
             
             // Send to extension via runtime message
             chrome.runtime.sendMessage({
@@ -40,70 +51,31 @@
             
             return true;
         }
+        console.log('❌ No Clerk session found');
         return false;
     }
     
     // Check immediately if Clerk is already loaded
-    let found = notifyExtensionOfAuth();
-    
-    // If not found immediately, set up a polling check
-    if (!found) {
-        let checkCount = 0;
-        const clerkCheckInterval = setInterval(() => {
-            if (notifyExtensionOfAuth() || checkCount > 10) {
-                clearInterval(clerkCheckInterval);
-            }
-            checkCount++;
-        }, 1000);
-    }
-    
-    // Special handling for extension auth flow
-    if (window.location.search.includes('extension=true')) {
-        // Add notification banner
-        const banner = document.createElement('div');
-        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:10px;background:#4caf50;color:white;text-align:center;z-index:9999;';
-        banner.innerHTML = 'Chartilyze Extension is waiting for authentication. Please sign in.';
+    notifyExtensionOfAuth().then(found => {
+        console.log('Initial auth check result:', found);
         
-        if (document.body) {
-            document.body.appendChild(banner);
-        } else {
-            window.addEventListener('DOMContentLoaded', () => {
-                document.body.appendChild(banner);
-            });
+        // If not found immediately, set up a polling check
+        if (!found) {
+            console.log('🔄 Setting up polling for Clerk session...');
+            let attempts = 0;
+            const maxAttempts = 30; // 30 seconds max
+            
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                console.log(`🔄 Polling attempt ${attempts}/${maxAttempts}`);
+                
+                const authFound = await notifyExtensionOfAuth();
+                
+                if (authFound || attempts >= maxAttempts) {
+                    console.log(authFound ? '✅ Auth found via polling' : '⏰ Polling timeout reached');
+                    clearInterval(pollInterval);
+                }
+            }, 1000); // Check every second
         }
-        
-        // Update banner when auth is detected
-        const updateBanner = () => {
-            if (window.Clerk && window.Clerk.session) {
-                banner.innerHTML = 'Authentication successful! You can close this tab.';
-                banner.style.background = '#2196F3';
-                
-                // Notify extension
-                chrome.runtime.sendMessage({
-                    type: 'EXTENSION_AUTH_COMPLETE',
-                    clerkData: {
-                        sessionId: window.Clerk.session.id,
-                        userId: window.Clerk.user.id
-                    }
-                });
-                
-                // Close tab after delay
-                setTimeout(() => {
-                    window.close();
-                }, 2000);
-                
-                return true;
-            }
-            return false;
-        };
-        
-        // Check periodically for auth completion
-        let checkCount = 0;
-        const authCheckInterval = setInterval(() => {
-            if (updateBanner() || checkCount > 20) {
-                clearInterval(authCheckInterval);
-            }
-            checkCount++;
-        }, 1000);
-    }
+    });
 })();

@@ -1,32 +1,52 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { jsonrepair } from 'jsonrepair';
+import JSON5 from 'json5';
+
+// Flowchart Types
+interface FlowchartNode {
+  id: string;
+  name: string;
+  shape: 'oval' | 'rectangle' | 'diamond';
+  icon: string;
+  color: string;
+  group?: string;
+}
+
+interface FlowchartGroup {
+  name: string;
+  icon: string;
+  color: string;
+  nodes: string[];
+}
+
+interface FlowchartRelationship {
+  from: string;
+  to: string;
+  condition: string;
+}
+
+// Add this type definition
+type FlowchartDirection = 'right' | 'down';
+
+interface ParsedFlowchartStrategy {
+  title: string;
+  direction: FlowchartDirection;  // Update to use the type
+  groups: FlowchartGroup[];
+  nodes: FlowchartNode[];
+  relationships: FlowchartRelationship[];
+  globalTags: string[];
+}
+
+// Chatbot Types
+interface ChatbotResponse {
+  message: string;
+  confidence: number;
+  suggestedActions?: string[];
+  relatedRules?: string[];
+}
 
 // API Response Types
-interface DeepSeekMessage {
-  role: string;
-  content: string;
-}
-
-interface DeepSeekChoice {
-  index: number;
-  message: DeepSeekMessage;
-  finish_reason: string;
-}
-
-interface DeepSeekResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: DeepSeekChoice[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
-// Mistral API Response Types
 interface MistralMessage {
   role: string;
   content: string | Array<{
@@ -57,6 +77,39 @@ interface MistralResponse {
   };
 }
 
+interface RawJsonNode {
+  id?: string;
+  name?: string;
+  shape?: string;
+  icon?: string;
+  color?: string;
+  group?: string;
+}
+
+interface RawJsonGroup {
+  name?: string;
+  icon?: string;
+  color?: string;
+  nodes?: string[];
+}
+
+interface RawJsonRelationship {
+  from: string;
+  to: string;
+  condition?: string;
+}
+
+interface RawJsonResult {
+  title?: string;
+  direction?: string;
+  groups?: RawJsonGroup[];
+  nodes?: RawJsonNode[];
+  relationships?: RawJsonRelationship[];
+  globalTags?: string[];
+}
+
+
+// Type guard for Mistral API response
 function isMistralResponse(data: unknown): data is MistralResponse {
   return (
     typeof data === 'object' &&
@@ -65,729 +118,382 @@ function isMistralResponse(data: unknown): data is MistralResponse {
     Array.isArray((data as any).choices)
   );
 }
+// Replace the existing fixTruncatedJson function
+function fixTruncatedJson(content: string): string {
+  // Early size check to prevent memory overflow
+  if (content.length > 3000) {
+    console.log('⚠️ Content too large for JSON fixing, truncating to 3000 chars');
+    content = content.substring(0, 3000);
+  }
 
-// Strategy Types
-interface DetailedStrategyComponent {
-  id: string;
-  type: 'entry' | 'exit' | 'risk_management' | 'position_sizing' | 'market_condition' | 'level_marking' | 'confirmation';
-  name: string;
-  description: string;
-  indicators?: Array<{
-    name: string;
-    condition: string;
-    value: string;
-    timeframe?: string;
-  }>;
-  patterns?: string[];
-  confidence: number;
-  priority: 'high' | 'medium' | 'low';
-  tags: string[];
-  timeframes?: string[];
-  conditions?: string[];
-}
-
-interface ParsedAdvancedStrategy {
-  components: DetailedStrategyComponent[];
-  globalTags: string[];
-  suggestedName: string;
-  complexity: 'simple' | 'intermediate' | 'advanced';
-  riskProfile: 'conservative' | 'moderate' | 'aggressive';
-}
-
-interface TradeAnalysis {
-  symbol: string | null;
-  type: 'LONG' | 'SHORT' | null;
-  riskReward: number | null;
-  confidence: number;
-  reasoning: string;
-  timeframe: string | null;
-  extractedData: {
-    hasSymbol: boolean;
-    hasRiskReward: boolean;
-    hasTimeframe: boolean;
-    hasDirection: boolean;
-  };
-  strategyMatch?: {
-    matchedComponents: string[];
-    suggestedRules: string[];
-    matchConfidence: number;
-  };
-}
-
-// Type Guards and Utilities
-function isDeepSeekResponse(data: unknown): data is DeepSeekResponse {
-  if (!data || typeof data !== 'object') return false;
-  
-  const response = data as DeepSeekResponse;
-  return Array.isArray(response.choices) &&
-         response.choices.length > 0 &&
-         typeof response.choices[0]?.message?.content === 'string';
-}
-
-function generateStrategyPrompt(description: string): string {
-  return `
-Analyze this trading strategy description and extract detailed structured information:
-
-"${description}"
-
-Provide a detailed analysis with the following components:
-
-1. Entry Rules
-2. Exit Rules
-3. Risk Management
-4. Position Sizing
-5. Market Conditions
-6. Technical Indicators
-7. Time Frames
-8. Confirmation Signals
-
-Format the response as a JSON object with the following structure:
-{
-  "components": [
-    {
-      "id": "unique-id",
-      "type": "component-type",
-      "name": "component-name",
-      "description": "detailed-description",
-      "indicators": [
-        {
-          "name": "indicator-name",
-          "condition": "condition-description",
-          "value": "value-setting",
-          "timeframe": "timeframe-setting"
-        }
-      ],
-      "patterns": ["pattern1", "pattern2"],
-      "confidence": 0.95,
-      "priority": "high/medium/low",
-      "tags": ["tag1", "tag2"],
-      "timeframes": ["timeframe1", "timeframe2"],
-      "conditions": ["condition1", "condition2"]
+  try {
+    // Remove markdown first
+    let cleaned = content
+      .replace(/```json\s*|\s*```/g, '')
+      .replace(/```\s*|\s*```/g, '')
+      .trim();
+    
+    // Use jsonrepair to fix the malformed JSON
+    const repaired = jsonrepair(cleaned);
+    console.log('🔧 JSON repaired successfully');
+    return repaired;
+  } catch (error) {
+    console.error('JSON repair failed:', error);
+    // Fallback to basic cleanup
+    let cleaned = content
+      .replace(/```json\s*|\s*```/g, '')
+      .trim();
+    
+    if (!cleaned.startsWith('{')) {
+      cleaned = '{' + cleaned;
     }
-  ],
-  "globalTags": ["tag1", "tag2"],
-  "suggestedName": "strategy-name",
-  "complexity": "simple/intermediate/advanced",
-  "riskProfile": "conservative/moderate/aggressive"
+    if (!cleaned.endsWith('}')) {
+      cleaned += '}';
+    }
+    
+    return cleaned;
+  }
 }
 
-Respond only with valid JSON, no additional text.`;
+// Strategy flowchart prompt generator
+function generateStrategyPrompt(description: string): string {
+  return `${description}
+
+Create a flowchart JSON with title, groups, nodes, and relationships.`;
 }
 
-// Main Actions
+// Property parser for node attributes
+function parseProperties(propsString: string): Record<string, string> {
+  const props: Record<string, string> = {};
+  
+  try {
+    const propPairs = propsString.split(',').map(p => p.trim());
+    
+    for (const pair of propPairs) {
+      const [key, value] = pair.split(':').map(s => s.trim());
+      if (key && value) {
+        props[key] = value;
+      }
+    }
+  } catch (error) {
+    console.error('Error parsing properties:', error);
+  }
+  
+  return props;
+}
+
+// Shape validator
+function validateShape(shape: string): 'oval' | 'rectangle' | 'diamond' {
+  if (shape === 'oval' || shape === 'rectangle' || shape === 'diamond') {
+    return shape;
+  }
+  return 'rectangle'; // Default shape if invalid
+}
+
+// Direction validator
+function validateDirection(direction: string): FlowchartDirection {
+  return direction === 'down' ? 'down' : 'right'; // Default to 'right' if invalid
+}
+
+// Flowchart syntax parser
+function parseFlowchartSyntax(text: string): ParsedFlowchartStrategy {
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+  
+  const flowchart: ParsedFlowchartStrategy = {
+    title: '',
+    direction: 'right',
+    groups: [],
+    nodes: [],
+    relationships: [],
+    globalTags: []
+  };
+
+  let currentGroup: FlowchartGroup | null = null;
+
+  try {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      // Parse title
+      if (line.startsWith('title')) {
+        flowchart.title = line.replace('title', '').trim().replace(/[\[\]]/g, '');
+        continue;
+      }
+
+      // Parse direction
+      if (line.startsWith('direction')) {
+        flowchart.direction = line.includes('right') ? 'right' : 'down';
+        continue;
+      }
+
+      // Parse group
+      if (line.startsWith('// GROUP:')) {
+        const groupMatch = line.match(/\/\/ GROUP:\s*([^\[]+)\s*(?:\[([^\]]+)\])?/);
+        if (groupMatch) {
+          const groupName = groupMatch[1].trim();
+          const groupProps = groupMatch[2] ? parseProperties(groupMatch[2]) : { icon: 'folder', color: 'gray' };
+          
+          currentGroup = {
+            name: groupName,
+            icon: groupProps.icon || 'folder',
+            color: groupProps.color || 'gray',
+            nodes: []
+          };
+          
+          flowchart.groups.push(currentGroup);
+        }
+        continue;
+      }
+
+      // Parse relationships
+      if (line.includes('>')) {
+        const [from, rest] = line.split('>').map(s => s.trim());
+        const [to, condition] = rest.split(':').map(s => s.trim());
+        
+        flowchart.relationships.push({
+          from: from.replace(/[\[\]]/g, ''),
+          to: to.replace(/[\[\]]/g, ''),
+          condition: condition || ''
+        });
+        continue;
+      }
+
+      // Parse nodes
+      const nodeMatch = line.match(/([^\[]+)\s*\[([^\]]+)\]/);
+      if (nodeMatch) {
+        const nodeName = nodeMatch[1].trim();
+        const nodeProps = parseProperties(nodeMatch[2]);
+        
+        const node: FlowchartNode = {
+          id: nodeName,
+          name: nodeName,
+          shape: validateShape(nodeProps.shape || 'rectangle'),
+          icon: nodeProps.icon || 'circle',
+          color: nodeProps.color || 'gray',
+          group: currentGroup?.name
+        };
+        
+        flowchart.nodes.push(node);
+        if (currentGroup) {
+          currentGroup.nodes.push(node.id);
+        }
+      }
+    }
+
+    return flowchart;
+
+  } catch (error) {
+    console.error('Error parsing flowchart syntax:', error);
+    return {
+      title: 'Error parsing strategy',
+      direction: 'right',
+      groups: [],
+      nodes: [],
+      relationships: [],
+      globalTags: []
+    };
+  }
+}
 export const parseStrategy = action({
   args: {
     description: v.string(),
-    complexity: v.optional(v.string()),
     enhancedParsing: v.optional(v.boolean()),
   },
-  handler: async (ctx, { description, complexity = 'basic', enhancedParsing = false }): Promise<ParsedAdvancedStrategy> => {
+  handler: async (ctx, { description, enhancedParsing = false }): Promise<ParsedFlowchartStrategy> => {
     const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
     const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
     
     if (!MISTRAL_API_KEY) {
-      console.error('❌ MISTRAL_API_KEY not found in environment variables');
       throw new Error('MISTRAL_API_KEY not configured');
     }
 
-    // Add detailed input logging
-    console.log('🔥 Starting strategy analysis with Mistral');
-    console.log('📝 Input description length:', description.length);
-    console.log('📝 Input description preview:', description.substring(0, 200) + (description.length > 200 ? '...' : ''));
-    console.log('⚙️ Enhanced parsing:', enhancedParsing);
-    
     try {
-      const prompt = generateStrategyPrompt(description);
-      console.log('📋 Generated prompt length:', prompt.length);
+      // Limit input size but keep it reasonable
+      const truncatedDescription = description.substring(0, 800);
       
-      const requestBody = {
-        model: 'mistral-small-latest',
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: enhancedParsing ? 1500 : 1000
-      };
-
-      console.log('🚀 Sending request to Mistral with max_tokens:', requestBody.max_tokens);
-
+      console.log('🚀 Starting strategy parsing for:', truncatedDescription.substring(0, 100));
+      
       const response = await fetch(MISTRAL_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${MISTRAL_API_KEY}`,
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          model: 'mistral-medium',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a JSON generator. Always return valid, complete JSON only. No explanations, no markdown, just pure JSON. '
+            },
+            {
+              role: 'user',
+              content: `Create a trading strategy flowchart in this EXACT JSON format:
+{
+  "title": "Strategy Name",
+  "direction": "right",
+  "groups": [{"name": "Group Name", "icon": "folder", "color": "blue", "nodes": ["node1"]}],
+  "nodes": [{"id": "node1", "name": "Node Name", "shape": "rectangle", "icon": "circle", "color": "gray", "group": "Group Name"}],
+  "relationships": [{"from": "node1", "to": "node2", "condition": "condition"}],
+  "globalTags": ["tag1"]
+}
+
+Strategy: ${truncatedDescription}`
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 1000, // Increased for complete JSON
+        })
       });
+
+      console.log('📡 API Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Mistral API error response:', errorText);
-        throw new Error(`Mistral API error: ${response.status} ${response.statusText}`);
+        console.error('❌ API Error:', response.status, errorText);
+        throw new Error(`Mistral API error: ${response.status}`);
       }
 
-      const rawData: unknown = await response.json();
+      const data = await response.json();
       
-      if (!isMistralResponse(rawData)) {
+      if (!isMistralResponse(data)) {
+        console.error('❌ Invalid response format');
         throw new Error('Invalid response format from Mistral API');
       }
 
-      const data: MistralResponse = rawData;
       const content = data.choices[0]?.message?.content;
-
       if (!content) {
+        console.error('❌ No content received');
         throw new Error('No content received from Mistral API');
       }
 
-      // Handle both string and array content types
-      let textContent: string;
-      if (typeof content === 'string') {
-        textContent = content;
+      // Convert content to string first, then use substring
+      const contentString = typeof content === 'string' ? 
+        content : 
+        Array.isArray(content) ? 
+          content.map(item => item.text || '').join('') : 
+          '';
+
+      // Early memory check - reject responses that are too large
+      if (contentString.length > 3000) {
+        console.log('⚠️ Response too large, truncating to prevent memory overflow');
+        const truncatedContent = contentString.substring(0, 3000);
+        console.log('📤 Truncated AI response:', truncatedContent.substring(0, 200));
       } else {
-        // If content is an array, extract text from the first text element
-        const textElement = content.find(item => item.type === 'text' && item.text);
-        textContent = textElement?.text || '';
-      }
-
-      // Add response logging
-      console.log('📤 Raw AI response length:', textContent.length);
-      console.log('📤 Raw AI response preview:', textContent.substring(0, 300) + (textContent.length > 300 ? '...' : ''));
-      console.log('🔧 Token usage:', data.usage);
-
-      // Clean and parse the content
-      let cleanContent = textContent.trim();
-      if (cleanContent.startsWith('```json')) {
-        cleanContent = cleanContent.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      }
-
-      console.log('🧹 Cleaned content length:', cleanContent.length);
-
-      const parsedStrategy = JSON.parse(cleanContent) as ParsedAdvancedStrategy;
-      
-      console.log('✅ Successfully parsed strategy with', parsedStrategy.components.length, 'components');
-      console.log('📊 Strategy name:', parsedStrategy.suggestedName);
-
-      return {
-        components: parsedStrategy.components || [],
-        globalTags: parsedStrategy.globalTags || [],
-        suggestedName: parsedStrategy.suggestedName || 'Custom Strategy',
-        complexity: parsedStrategy.complexity || 'intermediate',
-        riskProfile: parsedStrategy.riskProfile || 'moderate'
-      };
-
-    } catch (error) {
-      console.error('💥 Strategy parsing error:', error);
-      
-      return {
-        components: [{
-          id: 'fallback-1',
-          type: 'entry',
-          name: 'Basic Entry Rule',
-          description: 'Default entry rule due to parsing error',
-          confidence: 0.5,
-          priority: 'medium',
-          tags: ['fallback', 'basic']
-        }],
-        globalTags: ['fallback'],
-        suggestedName: 'Basic Strategy',
-        complexity: 'simple',
-        riskProfile: 'conservative'
-      };
-    }
-  },
-});
-
-export const analyzeTradeImage = action({
-  args: {
-    imageBase64: v.string(),
-    prompt: v.string(),
-  },
-  handler: async (ctx, { imageBase64, prompt }): Promise<TradeAnalysis> => {
-    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-
-    if (!DEEPSEEK_API_KEY) {
-      console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
-      throw new Error('DEEPSEEK_API_KEY not configured');
-    }
-
-    console.log('🔥 Starting trade image analysis');
-
-    try {
-      const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-      
-      // First, let's have DeepSeek identify the symbol and timeframe from OCR data
-      const initialPrompt = `
-From this OCR text of a trading chart, identify the symbol and timeframe:
-
-${prompt}
-
-Focus on the "Top Left Corner" section which contains the trading pair and timeframe information.
-Return only a JSON response in this format:
-{
-  "symbol": "the trading pair (e.g., GBP/USD)",
-  "timeframe": "the timeframe (e.g., 1D, 1H)",
-  "confidence": number between 0 and 1
-}`;
-
-      const initialRequestBody = {
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a trading chart analyzer. Extract the symbol and timeframe from the OCR data.'
-          },
-          {
-            role: 'user',
-            content: initialPrompt
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 500
-      };
-
-      // Get initial analysis for symbol and timeframe
-      const initialResponse = await fetch(DEEPSEEK_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify(initialRequestBody)
-      });
-
-      if (!initialResponse.ok) {
-        throw new Error(`Initial DeepSeek API error: ${initialResponse.status}`);
-      }
-
-      const initialData: unknown = await initialResponse.json();
-      
-      if (!isDeepSeekResponse(initialData)) {
-        throw new Error('Invalid response format from initial DeepSeek API call');
-      }
-
-      const initialContent = initialData.choices[0]?.message?.content;
-      if (!initialContent) {
-        throw new Error('No content received from initial DeepSeek API call');
-      }
-
-      interface ChartInfo {
-        symbol: string;
-        timeframe: string;
-        confidence: number;
-      }
-
-      const chartInfo = JSON.parse(initialContent) as ChartInfo;
-
-      console.log('📊 DeepSeek Chart Info:', chartInfo);
-
-      if (!chartInfo.symbol || !chartInfo.timeframe) {
-        throw new Error('Could not identify symbol or timeframe from chart');
-      }
-
-      // Now get the full analysis with the identified symbol and timeframe
-      const enhancedPrompt = `
-You are analyzing a ${chartInfo.symbol} chart on the ${chartInfo.timeframe} timeframe.
-
-Chart Information from OCR:
-${prompt}
-
-Strategy Context:
-${prompt.includes('Active Strategy:') ? prompt.split('Active Strategy:')[1] : 'No strategy provided'}
-
-Based on this specific ${chartInfo.symbol} ${chartInfo.timeframe} setup, provide a detailed analysis.
-
-Respond in this exact JSON format:
-{
-  "symbol": "${chartInfo.symbol}",
-  "timeframe": "${chartInfo.timeframe}",
-  "type": "LONG or SHORT based on the setup",
-  "riskReward": number or null,
-  "confidence": number between 0 and 1,
-  "reasoning": "detailed analysis of this specific setup",
-  "strategyMatch": {
-    "matchedComponents": ["list relevant strategy components that apply to this setup"],
-    "suggestedRules": ["list strategy rules that are applicable"],
-    "matchConfidence": number between 0 and 1
-  }
-}`;
-
-      const fullAnalysisRequestBody = {
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: `You are analyzing a ${chartInfo.symbol} ${chartInfo.timeframe} chart. Provide specific analysis for this setup.`
-          },
-          {
-            role: 'user',
-            content: enhancedPrompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 1000
-      };
-
-      const fullAnalysisResponse = await fetch(DEEPSEEK_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify(fullAnalysisRequestBody)
-      });
-
-      if (!fullAnalysisResponse.ok) {
-        throw new Error(`Full analysis DeepSeek API error: ${fullAnalysisResponse.status}`);
-      }
-
-      const fullAnalysisData: unknown = await fullAnalysisResponse.json();
-      
-      if (!isDeepSeekResponse(fullAnalysisData)) {
-        throw new Error('Invalid response format from full analysis DeepSeek API call');
-      }
-
-      const fullAnalysisContent = fullAnalysisData.choices[0]?.message?.content;
-      if (!fullAnalysisContent) {
-        throw new Error('No content received from full analysis DeepSeek API call');
-      }
-
-      console.log('✨ Full Analysis:', fullAnalysisContent);
-
-      // Clean the response to remove markdown code blocks if present
-      let cleanedContent = fullAnalysisContent;
-      if (fullAnalysisContent.includes('```json')) {
-        // Extract JSON from markdown code blocks
-        const jsonMatch = fullAnalysisContent.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch && jsonMatch[1]) {
-          cleanedContent = jsonMatch[1].trim();
-        }
-      } else if (fullAnalysisContent.includes('```')) {
-        // Handle generic code blocks
-        const codeMatch = fullAnalysisContent.match(/```[\s\S]*?([\s\S]*?)\s*```/);
-        if (codeMatch && codeMatch[1]) {
-          cleanedContent = codeMatch[1].trim();
-        }
+        console.log('📤 Raw AI response:', contentString.substring(0, 200));
       }
       
-      const parsedResult = JSON.parse(cleanedContent);
+      console.log('📊 Token usage:', data.usage);
+      console.log('📏 Content length:', contentString.length);
 
-      return {
-        symbol: chartInfo.symbol,
-        type: parsedResult.type || null,
-        riskReward: parsedResult.riskReward || null,
-        confidence: chartInfo.confidence || 0.5,
-        reasoning: parsedResult.reasoning || 'Analysis completed',
-        timeframe: chartInfo.timeframe,
-        extractedData: {
-          hasSymbol: true,
-          hasRiskReward: !!parsedResult.riskReward,
-          hasTimeframe: true,
-          hasDirection: !!parsedResult.type
-        },
-        strategyMatch: {
-          matchedComponents: parsedResult.strategyMatch?.matchedComponents || [],
-          suggestedRules: parsedResult.strategyMatch?.suggestedRules || [],
-          matchConfidence: parsedResult.strategyMatch?.matchConfidence || 0.5
-        }
-      };
+      // Use truncated content if necessary
+      const workingContent = contentString.length > 3000 ? 
+        contentString.substring(0, 3000) : 
+        contentString;
 
-    } catch (error: unknown) {
-      console.error('💥 Trade analysis error:', error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'An unknown error occurred';
+      // Clean content more carefully
+      const cleanedContent = typeof content === 'string' ? content : 
+        Array.isArray(content) ? content.map(item => item.text || '').join('') : '';
 
-      return {
-        symbol: null,
-        type: null,
-        riskReward: null,
-        confidence: 0.3,
-        reasoning: `Analysis failed - ${errorMessage}`,
-        timeframe: null,
-        extractedData: {
-          hasSymbol: false,
-          hasRiskReward: false,
-          hasTimeframe: false,
-          hasDirection: false
-        }
-      };
-    }
-  },
-});
+      console.log('📝 Content length:', cleanedContent.length);
+      console.log('📝 Raw content preview:', cleanedContent.substring(0, 200));
 
-// Add this new action after the parseStrategy action (around line 232)
-
-export const testMistralOCR = action({
-  args: {
-    imageBase64: v.string(),
-  },
-  handler: async (ctx, { imageBase64 }): Promise<{ extractedText: string; rawResponse: string }> => {
-    const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
-    const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
-
-    if (!MISTRAL_API_KEY) {
-      console.error('❌ MISTRAL_API_KEY not found in environment variables');
-      throw new Error('MISTRAL_API_KEY not configured');
-    }
-
-    console.log('🔍 Testing Mistral OCR extraction');
-
-    try {
-      const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
-      
-      const requestBody = {
-        model: 'pixtral-12b-2409',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Please extract ALL visible text from this trading chart image. Focus especially on:\n\n1. Trading pair/symbol (usually in top left corner)\n2. Timeframe information\n3. Price levels and numbers\n4. Any indicators or labels\n5. Menu items or interface text\n\nProvide the extracted text in a clear, organized format. Be thorough and include everything you can read.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:image/jpeg;base64,${cleanBase64}`
-                }
-              }
-            ]
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 2000
-      };
-
-      console.log('📦 Mistral request structure:', {
-        model: requestBody.model,
-        messageCount: requestBody.messages.length,
-        temperature: requestBody.temperature,
-        max_tokens: requestBody.max_tokens
-      });
-
-      const response = await fetch(MISTRAL_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${MISTRAL_API_KEY}`,
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Mistral API error response:', errorText);
-        throw new Error(`Mistral API error: ${response.status} ${response.statusText}`);
-      }
-
-      const rawData: unknown = await response.json();
-      console.log('📥 Raw Mistral API response:', rawData);
-      
-      if (!isMistralResponse(rawData)) {
-        throw new Error('Invalid response format from Mistral API');
-      }
-
-      const data: MistralResponse = rawData;
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No content received from Mistral API');
-      }
-
-      const extractedText = typeof content === 'string' ? content : JSON.stringify(content);
-      
-      console.log('✨ Extracted text from Mistral:', extractedText);
-
-      return {
-        extractedText,
-        rawResponse: JSON.stringify(rawData, null, 2)
-      };
-
-    } catch (error: unknown) {
-      console.error('💥 Mistral OCR error:', error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'An unknown error occurred';
-
-      throw new Error(`Mistral OCR failed: ${errorMessage}`);
-    }
-  },
-});
-
-export const analyzeOCRText = action({
-  args: {
-    extractedText: v.string(),
-    prompt: v.string(),
-  },
-  handler: async (ctx, { extractedText, prompt }): Promise<TradeAnalysis> => {
-    const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
-    const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions'; // Fixed URL
-
-    if (!DEEPSEEK_API_KEY) {
-      console.error('❌ DEEPSEEK_API_KEY not found in environment variables');
-      throw new Error('DEEPSEEK_API_KEY not configured');
-    }
-
-    console.log('🔍 Analyzing OCR text with DeepSeek');
-    console.log('📝 Extracted text to analyze:', extractedText);
-
-    try {
-      // Enhanced prompt for better symbol/timeframe extraction and strategy comparison
-      const enhancedPrompt = `
-Analyze this OCR text from a trading chart and compare it to the active strategy:
-
-OCR TEXT:
-${extractedText}
-
-STRATEGY CONTEXT:
-${prompt}
-
-Please extract the following information and provide analysis:
-1. Trading symbol/pair (look for pairs like GBP/USD, EUR/USD, etc.)
-2. Timeframe (look for 1D, 1H, 4H, etc.)
-3. Current price and key levels
-4. How this setup compares to the active strategy rules
-5. Trade direction suggestion (LONG/SHORT) if applicable
-
-Respond in this exact JSON format:
-{
-  "symbol": "extracted trading pair or null",
-  "timeframe": "extracted timeframe or null",
-  "type": "LONG or SHORT or null",
-  "riskReward": "estimated risk reward ratio or null",
-  "confidence": "number between 0 and 1",
-  "reasoning": "detailed analysis comparing OCR data to strategy",
-  "strategyMatch": {
-    "matchedComponents": ["list of strategy components that match this setup"],
-    "suggestedRules": ["applicable strategy rules for this setup"],
-    "matchConfidence": "number between 0 and 1"
-  }
-}`;
-
-      const requestBody = {
-        model: 'deepseek-chat',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional trading analyst. Extract trading information from OCR text and compare it to strategy rules. Always respond with valid JSON.'
-          },
-          {
-            role: 'user',
-            content: enhancedPrompt
-          }
-        ],
-        temperature: 0.1,
-        max_tokens: 1500
-      };
-
-      console.log('📦 DeepSeek request structure:', {
-        model: requestBody.model,
-        messageCount: requestBody.messages.length,
-        temperature: requestBody.temperature,
-        max_tokens: requestBody.max_tokens
-      });
-
-      const response = await fetch(DEEPSEEK_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ DeepSeek API error response:', errorText);
-        throw new Error(`DeepSeek API error: ${response.status} ${response.statusText}`);
-      }
-
-      const rawData: unknown = await response.json();
-      console.log('📥 Raw DeepSeek API response:', rawData);
-      
-      if (!isDeepSeekResponse(rawData)) {
-        throw new Error('Invalid response format from DeepSeek API');
-      }
-
-      const data: DeepSeekResponse = rawData;
-      const content = data.choices[0]?.message?.content;
-
-      if (!content) {
-        throw new Error('No content received from DeepSeek API');
-      }
-
-      console.log('✨ DeepSeek analysis result:', content);
+      // Apply JSON repair BEFORE parsing
+      const fixedContent = fixTruncatedJson(cleanedContent);
+      console.log('🔧 Fixed content preview:', fixedContent.substring(0, 200));
 
       try {
-        // Clean the response to remove markdown code blocks if present
-        let cleanedContent = content;
-        if (content.includes('```json')) {
-          const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-          if (jsonMatch && jsonMatch[1]) {
-            cleanedContent = jsonMatch[1].trim();
-          }
-        } else if (content.includes('```')) {
-          const codeMatch = content.match(/```[\s\S]*?([\s\S]*?)\s*```/);
-          if (codeMatch && codeMatch[1]) {
-            cleanedContent = codeMatch[1].trim();
-          }
-        }
+      const parsedResult = JSON5.parse(fixedContent) as RawJsonResult;
+      console.log('✅ Successfully parsed JSON');
         
-        const analysisResult = JSON.parse(cleanedContent);
-        
-        return {
-          symbol: analysisResult.symbol || null,
-          type: analysisResult.type || null,
-          riskReward: analysisResult.riskReward || null,
-          confidence: analysisResult.confidence || 0,
-          reasoning: analysisResult.reasoning || 'No reasoning provided',
-          timeframe: analysisResult.timeframe || null,
-          extractedData: {
-            hasSymbol: Boolean(analysisResult.symbol),
-            hasRiskReward: Boolean(analysisResult.riskReward),
-            hasTimeframe: Boolean(analysisResult.timeframe),
-            hasDirection: Boolean(analysisResult.type)
-          },
-          strategyMatch: analysisResult.strategyMatch
+        // Create result with validation
+        const result = {
+          title: (parsedResult.title || 'Trading Strategy').substring(0, 50),
+          direction: validateDirection(parsedResult.direction || 'right'),
+          groups: (parsedResult.groups || []).slice(0, 3).map((group: RawJsonGroup) => ({
+            name: (group.name || 'Group').substring(0, 30),
+            icon: group.icon || 'folder',
+            color: group.color || 'gray',
+            nodes: (group.nodes || []).slice(0, 5)
+          })),
+          nodes: (parsedResult.nodes || []).slice(0, 5).map((node: RawJsonNode) => ({
+            id: (node.id || `n${Math.random().toString(36).substring(2, 6)}`).substring(0, 15),
+            name: (node.name || 'Node').substring(0, 30),
+            shape: validateShape(node.shape || 'rectangle'),
+            icon: node.icon || 'circle',
+            color: node.color || 'gray',
+            group: (node.group || '').substring(0, 30)
+          })),
+          relationships: (parsedResult.relationships || []).slice(0, 5).map((rel: RawJsonRelationship) => ({
+            from: rel.from.substring(0, 15),
+            to: rel.to.substring(0, 15),
+            condition: (rel.condition || '').substring(0, 30)
+          })),
+          globalTags: (parsedResult.globalTags || []).slice(0, 5).map(tag => 
+            tag.substring(0, 20)
+          )
         };
-      } catch (parseError) {
-        console.error('❌ Failed to parse DeepSeek response as JSON:', parseError);
-        console.log('📄 Raw content:', content);
         
+        console.log('🎯 Returning parsed result with', result.nodes.length, 'nodes');
+        return result;
+
+      } catch (parseError) {
+        console.error('❌ JSON parsing failed:', parseError);
+        console.error('❌ Problematic content:', cleanedContent);
+        
+        // Return fallback with logging
+        console.log('🔄 Returning JSON parse fallback');
         return {
-          symbol: null,
-          type: null,
-          riskReward: null,
-          confidence: 0,
-          reasoning: `Analysis failed to parse: ${content}`,
-          timeframe: null,
-          extractedData: {
-            hasSymbol: false,
-            hasRiskReward: false,
-            hasTimeframe: false,
-            hasDirection: false
-          }
+          title: 'Trading Strategy',
+          direction: 'right',
+          groups: [{
+            name: 'Strategy',
+            icon: 'folder',
+            color: 'blue',
+            nodes: ['start']
+          }],
+          nodes: [{
+            id: 'start',
+            name: 'Start',
+            shape: 'oval',
+            icon: 'play',
+            color: 'green',
+            group: 'Strategy'
+          }],
+          relationships: [],
+          globalTags: []
         };
       }
-    } catch (error: unknown) {
-      console.error('💥 DeepSeek analysis error:', error);
-      
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'An unknown error occurred';
 
-      throw new Error(`DeepSeek analysis failed: ${errorMessage}`);
+    } catch (error) {
+      console.error('💥 Strategy parsing failed:', error);
+      
+      // Return fallback with logging
+      console.log('🔄 Returning API error fallback');
+      return {
+        title: 'Basic Strategy',
+        direction: 'right',
+        groups: [{
+          name: 'Steps',
+          icon: 'folder',
+          color: 'blue',
+          nodes: ['start']
+        }],
+        nodes: [{
+          id: 'start',
+          name: 'Start',
+          shape: 'oval',
+          icon: 'play',
+          color: 'green',
+          group: 'Steps'
+        }],
+        relationships: [],
+        globalTags: []
+      };
     }
   },
 });
 
-// Add this interface near the top with other interfaces (around line 115)
 interface ChatbotResponse {
   message: string;
   confidence: number;
@@ -913,26 +619,6 @@ FORMATTING GUIDELINES:
       const suggestedActions: string[] = [];
       const relatedRules: string[] = [];
       
-      // Comment out or remove this entire section:
-      /*
-      if (strategyContext?.rules) {
-        strategyContext.rules.forEach((rule, index) => {
-          // Simple keyword matching to find related rules
-          const keywords = message.toLowerCase().split(' ');
-          const ruleWords = rule.toLowerCase().split(' ');
-          
-          const hasMatch = keywords.some(keyword => 
-            ruleWords.some(word => word.includes(keyword) && keyword.length > 3)
-          );
-          
-          if (hasMatch) {
-            relatedRules.push(rule);
-          }
-        });
-      }
-      */
-
-      // Simple confidence scoring based on strategy context availability
       let confidence = 0.7; // Base confidence
       if (strategyContext) confidence += 0.2;
       if (relatedRules.length > 0) confidence += 0.1;
@@ -977,3 +663,4 @@ FORMATTING GUIDELINES:
     }
   }
 });
+

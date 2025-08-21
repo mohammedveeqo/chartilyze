@@ -54,19 +54,19 @@ export function EditStrategyModal({ strategyId, onClose }: EditStrategyModalProp
   })
 
   // Pre-populate form with existing strategy data
-  useEffect(() => {
-    if (strategy) {
-      setStrategyData({
-        name: strategy.name || '',
-        description: strategy.description || '',
-        originalDescription: strategy.rules?.[0] || strategy.description || '',
-        components: strategy.components || [],
-        globalTags: strategy.globalTags || [],
-        complexity: strategy.complexity || 'intermediate',
-        riskProfile: strategy.riskProfile || 'moderate'
-      })
-    }
-  }, [strategy])
+useEffect(() => {
+  if (strategy) {
+    setStrategyData({
+      name: strategy.name || '',
+      description: strategy.description || '',
+      originalDescription: strategy.rules?.[0] || '',
+      components: strategy.components || [],
+      globalTags: strategy.globalTags || [],
+      complexity: strategy.complexity || 'intermediate',
+      riskProfile: strategy.riskProfile || 'moderate'
+    })
+  }
+}, [strategy])
 
   // Handle escape key
   useEffect(() => {

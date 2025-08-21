@@ -1,16 +1,47 @@
-// convex/types.ts
 import { Id } from "./_generated/dataModel";
 
+// Flowchart Types
+export interface FlowchartNode {
+  id: string;
+  name: string;
+  shape: 'oval' | 'rectangle' | 'diamond';
+  icon: string;
+  color: string;
+  group?: string;
+}
 
+export interface FlowchartGroup {
+  name: string;
+  icon: string;
+  color: string;
+  nodes: string[];
+}
+
+export interface FlowchartRelationship {
+  from: string;
+  to: string;
+  condition: string;
+}
+
+// Strategy Types
+export interface Strategy {
+  name: string;
+  rules: string[];
+  flowchart?: {
+    nodes: FlowchartNode[];
+    groups: FlowchartGroup[];
+    relationships: FlowchartRelationship[];
+  };
+  globalTags?: string[];
+}
+
+// Journal Types
 export interface Journal {
   _id: Id<"journals">;
   userId: string;
   name: string;
   description?: string;
-  strategy?: {
-    name: string;
-    rules: string[];
-  };
+  strategy?: Strategy;
   settings?: {
     defaultRiskPercentage: number;
     defaultPositionSize: number;
@@ -25,8 +56,8 @@ export interface JournalsQueryResult {
   total: number;
 }
 
-
-export type Trade = {
+// Trade Types
+export interface Trade {
   _id: Id<"trades">;
   _creationTime: number;
   journalId: Id<"journals">;
@@ -51,22 +82,4 @@ export type Trade = {
   };
   createdAt: number;
   updatedAt: number;
-};
-
-
-export interface RuleCondition {
-  id: string
-  type: 'indicator' | 'price' | 'pattern' | 'time' | 'volume' | 'custom'
-  operator: 'equals' | 'greater' | 'less' | 'between' | 'contains' | 'matches'
-  value: any
-  connector: 'AND' | 'OR'
-  group?: string
-}
-
-export interface RuleAction {
-  id: string
-  type: 'entry' | 'exit' | 'alert' | 'position_size' | 'stop_loss' | 'take_profit' | 'custom'
-  parameters: Record<string, any>
-  delay?: number
-  conditions?: string[]
 }
