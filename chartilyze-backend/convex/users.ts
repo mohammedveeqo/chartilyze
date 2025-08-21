@@ -47,4 +47,15 @@ export const getUser = query({
   },
 });
 
+// Add this new function that the extension is looking for
+export const getUserById = query({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("users")
+      .filter(q => q.eq(q.field("clerkId"), args.userId))
+      .first();
+  },
+});
+
     

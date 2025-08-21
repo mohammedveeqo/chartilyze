@@ -1,6 +1,7 @@
 export interface ChatMessageRequest {
   message: string
   context: string
+  strategy?: string // Add optional strategy property
 }
 
 export interface AuthCheckRequest {
@@ -46,6 +47,7 @@ export interface ScreenshotResponse {
 export interface StrategiesResponse {
   strategies: Strategy[]
   success: boolean
+  error?: string // Add optional error property
 }
 
 export interface OpenAuthFlowRequest {

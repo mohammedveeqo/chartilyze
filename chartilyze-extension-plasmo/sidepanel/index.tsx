@@ -75,7 +75,9 @@ function SidePanel() {
     try {
       const stored = await storage.get('currentStrategy')
       if (stored) {
-        setCurrentStrategy(stored)
+        // Parse stored strategy if it's a string, or use directly if it's already a Strategy object
+        const strategy = typeof stored === 'string' ? JSON.parse(stored) : stored
+        setCurrentStrategy(strategy)
       }
     } catch (error) {
       console.error("Failed to load current strategy:", error)

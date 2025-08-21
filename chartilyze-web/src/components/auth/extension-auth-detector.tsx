@@ -4,28 +4,35 @@ import { useEffect } from 'react';
 import { useAuth } from '@clerk/nextjs';
 
 export function ExtensionAuthDetector() {
-  const { isSignedIn, sessionId, userId } = useAuth();
+  const { isSignedIn, sessionId, userId, getToken } = useAuth();
 
   useEffect(() => {
-    function notifyExtensionOfAuth() {
+    async function notifyExtensionOfAuth() {
       if (isSignedIn && sessionId && userId) {
         console.log('Found Clerk session, notifying extension');
         
-        // Send to extension via window message
-        window.postMessage({
-          type: 'EXTENSION_AUTH_COMPLETE',
-          clerkData: {
-            sessionId,
-            userId,
-            token: null // Will be fetched by extension
-          }
-        }, '*');
-        
-        // Dispatch custom event
-        const authEvent = new CustomEvent('chartilyze-auth-detected', {
-          detail: { sessionId, userId }
-        });
-        document.dispatchEvent(authEvent);
+        try {
+          // Get the actual Clerk token
+          const clerkToken = await getToken();
+          
+          // Send to extension via window message
+          window.postMessage({
+            type: 'EXTENSION_AUTH_COMPLETE',
+            clerkData: {
+              sessionId,
+              userId,
+              token: clerkToken // ✅ Now sending the actual token
+            }
+          }, '*');
+          
+          // Dispatch custom event
+          const authEvent = new CustomEvent('chartilyze-auth-detected', {
+            detail: { sessionId, userId }
+          });
+          document.dispatchEvent(authEvent);
+        } catch (error) {
+          console.error('Failed to get Clerk token:', error);
+        }
       }
     }
 
@@ -55,7 +62,7 @@ export function ExtensionAuthDetector() {
         }
       };
     }
-  }, [isSignedIn, sessionId, userId]);
+  }, [isSignedIn, sessionId, userId, getToken]);
 
   return null; // This component doesn't render anything
 }

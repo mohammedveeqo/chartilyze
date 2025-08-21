@@ -10,6 +10,7 @@ import type {
   ScreenshotResponse,
   StrategiesResponse
 } from "~lib/types"
+import { getApiUrl, API_CONFIG } from "~lib/config"
 
 // Define message handlers type interface
 type MessageHandlers = {
@@ -62,7 +63,7 @@ const handler: PlasmoMessaging.MessageHandler = async (req, res) => {
 
 async function sendChatMessage(data: ChatMessageRequest): Promise<ChatResponse> {
   try {
-    const response = await fetch('https://decisive-tapir-206.convex.site/api/chat', {
+    const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.CHAT), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -96,19 +97,19 @@ async function checkAuthentication(): Promise<AuthResponse> {
       return { isAuthenticated: false }
     }
     
-    // Verify token with backend
-    const response = await fetch('https://decisive-tapir-206.convex.site/api/auth/verify', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+    // Verify token with backend - pass token as query parameter
+    const response = await fetch(`${getApiUrl(API_CONFIG.ENDPOINTS.AUTH_VERIFY)}?token=${encodeURIComponent(token)}`, {
+      method: 'GET'
     })
     
     if (response.ok) {
-      const user = await response.json()
+      const result = await response.json()
       return {
-        isAuthenticated: true,
-        user
+        isAuthenticated: result.valid === true,
+        user: { 
+          id: result.userId, // Changed from userId to id to match AuthResponse type
+          email: result.email || '' // Add email field as required by type
+        }
       }
     } else {
       return { isAuthenticated: false }
@@ -140,7 +141,7 @@ async function captureScreenshot(tabId?: number): Promise<string> {
 async function getStrategies(): Promise<any[]> {
   try {
     const token = await getStoredToken()
-    const response = await fetch('https://decisive-tapir-206.convex.site/api/strategies', {
+    const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.STRATEGIES), {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`

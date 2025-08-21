@@ -354,6 +354,31 @@ http.route({
           journalName: journal.name
         }));
 
+      // Return the strategies
+      return new Response(
+        JSON.stringify({ strategies }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } catch (error) {
+      console.error("Strategies endpoint error:", error);
+      return new Response(
+        JSON.stringify({ 
+          strategies: [],
+          error: "Failed to fetch strategies",
+          details: error instanceof Error ? error.message : "Unknown error"
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+  }),
+});
+
 // Chat Endpoint
 http.route({
   path: "/extension/chat",
@@ -867,7 +892,7 @@ http.route({
     try {
       let userId;
       try {
-        const payload = JSON.parse(atob(token.split('.').[1]));
+        const payload = JSON.parse(atob(token.split('.')[1]));
         userId = payload.sub;
       } catch (e) {
         userId = token;

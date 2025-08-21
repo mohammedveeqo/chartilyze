@@ -38,7 +38,9 @@
     "permissions": [
       "storage",
       "sidePanel",
-      "contextMenus"
+      "contextMenus",
+      "activeTab",
+      "tabs"
     ]
   }
 }

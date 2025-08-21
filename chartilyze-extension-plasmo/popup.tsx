@@ -27,15 +27,38 @@ function Popup() {
 
   useEffect(() => {
     checkAuthStatus()
+    
+    // Listen for storage changes to detect when auth token is stored
+    const handleStorageChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+      console.log('🔍 Storage changed:', changes) // Debug log
+      if (changes.authToken) {
+        console.log('🔑 Auth token changed, re-checking auth status') // Debug log
+        // Auth token was added or changed, re-check auth status
+        checkAuthStatus()
+      }
+    }
+    
+    chrome.storage.onChanged.addListener(handleStorageChange)
+    
+    // Cleanup listener on unmount
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange)
+    }
+  }, []) // Changed from [messages] to [] - only run once on mount
+  
+  // Separate useEffect for scrolling when messages change
+  useEffect(() => {
     scrollToBottom()
   }, [messages])
-
+  
   const checkAuthStatus = async () => {
     try {
+      console.log('🔍 Checking auth status...') // Debug log
       const result = await sendToBackground({ name: "checkAuth" })
+      console.log('✅ Auth check result:', result) // Debug log
       setIsAuthenticated(result.isAuthenticated)
     } catch (error) {
-      console.error('Auth check failed:', error)
+      console.error('❌ Auth check failed:', error)
     }
   }
 
