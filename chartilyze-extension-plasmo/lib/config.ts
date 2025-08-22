@@ -4,7 +4,7 @@ const isDevelopment = process.env.NODE_ENV === 'development'
 export const API_CONFIG = {
   // Use localhost for development, production URLs for production
   BASE_URL: isDevelopment ? 'http://localhost:3000' : 'https://app.chartilyze.com',
-  CONVEX_URL: 'https://decisive-tapir-206.convex.cloud',
+  CONVEX_URL: 'https://decisive-tapir-206.convex.site', // Updated to new deployment URL
   
   // API endpoints
   ENDPOINTS: {
