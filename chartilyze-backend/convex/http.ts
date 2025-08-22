@@ -380,6 +380,7 @@ http.route({
 });
 
 // Chat Endpoint
+// Around line 387-400, add debug logging:
 http.route({
   path: "/extension/chat",
   method: "POST",
@@ -388,20 +389,27 @@ http.route({
       const body = await request.json() as ChatRequestBody;
       const { message, strategyContext, conversationHistory } = body;
 
-      if (!message) {
-        return new Response(
-          JSON.stringify({ error: "Message is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
+      // Add debug logging
+      // Around line 394-400, replace the existing logging with:
+      console.log('🚀🚀🚀 [HTTP ENDPOINT CALLED] Extension chat request received!');
+      console.log('📦 Request body:', {
+        message: message?.substring(0, 50) + '...',
+        hasStrategyContext: !!strategyContext,
+        strategyName: strategyContext?.name,
+        strategyRulesCount: strategyContext?.rules?.length || 0,
+        actualRules: strategyContext?.rules,
+        conversationLength: conversationHistory?.length || 0
+      });
 
       const response = await ctx.runAction(api.aiStrategy.chatWithStrategy, {
         message,
         strategyContext,
         conversationHistory: conversationHistory || [],
+      });
+
+      console.log('🤖 [HTTP] AI response generated:', {
+        messageLength: response.message?.length || 0,
+        confidence: response.confidence
       });
 
       return new Response(JSON.stringify(response), {

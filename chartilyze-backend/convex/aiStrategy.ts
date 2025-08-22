@@ -507,7 +507,8 @@ export const chatWithStrategy = action({
     message: v.string(),
     strategyContext: v.optional(v.object({
       name: v.string(),
-      rules: v.array(v.string()),
+      description: v.optional(v.string()),
+      rules: v.optional(v.array(v.string())), // ← Change from v.array(v.string()) to v.optional(v.array(v.string()))
       components: v.optional(v.array(v.any())),
       complexity: v.optional(v.string()),
       riskProfile: v.optional(v.string())
@@ -526,28 +527,40 @@ export const chatWithStrategy = action({
     }
 
     // Build context-aware prompt
-    let systemPrompt = `You are a helpful trading strategy assistant. Provide clear, well-formatted advice using markdown.
+    let systemPrompt = `You are a specialized trading strategy assistant. You MUST provide strategy-specific advice based on the provided context.
 
-FORMATTING GUIDELINES:
-- Use **bold** for important terms and key concepts
+FORMATTING REQUIREMENTS:
+- Use **bold** for key concepts and important terms
 - Use *italic* for emphasis
-- Use bullet points with - for lists
-- Use numbered lists (1. 2. 3.) for sequential steps
-- Use ### for section headers when appropriate
-- Keep responses concise but well-structured
-- Use \`code\` formatting for technical terms like indicators
-- Make text scannable and easy to read
+- Use bullet points (-) for lists
+- Use numbered lists for sequential steps
+- Use \`code\` formatting for technical indicators
+- Keep responses well-structured and scannable
 
+CRITICAL INSTRUCTIONS:
+- You MUST reference the specific strategy rules when answering
+- NEVER give generic trading advice
+- ALWAYS relate your response to the current strategy context
+- If no strategy context is provided, ask the user to select a strategy first
 `;
 
     if (strategyContext) {
-      systemPrompt += `Current Strategy: "${strategyContext.name}"\n`;
-      systemPrompt += `Complexity: ${strategyContext.complexity || 'Not specified'}\n`;
-      systemPrompt += `Risk Profile: ${strategyContext.riskProfile || 'Not specified'}\n\n`;
+      systemPrompt += `\n**CURRENT STRATEGY: "${strategyContext.name}"**\n`;
+      systemPrompt += `**Complexity:** ${strategyContext.complexity || 'Not specified'}\n`;
+      systemPrompt += `**Risk Profile:** ${strategyContext.riskProfile || 'Not specified'}\n\n`;
       
       if (strategyContext.rules && strategyContext.rules.length > 0) {
-        systemPrompt += `Strategy Rules:\n${strategyContext.rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}\n\n`;
+        systemPrompt += `**STRATEGY RULES YOU MUST REFERENCE:**\n${strategyContext.rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}\n\n`;
       }
+      
+      systemPrompt += `**MANDATORY RESPONSE REQUIREMENTS:**\n`;
+      systemPrompt += `- You MUST explicitly reference at least one strategy rule in your response\n`;
+      systemPrompt += `- You MUST relate your advice specifically to the "${strategyContext.name}" strategy\n`;
+      systemPrompt += `- You MUST avoid generic trading advice\n`;
+      systemPrompt += `- Start your response by mentioning the strategy name\n`;
+      systemPrompt += `- Keep responses under 150 words but strategy-specific\n`;
+    } else {
+      systemPrompt += `\n**NO STRATEGY SELECTED:**\nYou must ask the user to select a trading strategy first before you can provide specific advice.`;
     }
 
     systemPrompt += `Response Guidelines:
@@ -565,13 +578,29 @@ FORMATTING GUIDELINES:
     ];
 
     try {
+      // Around line 560-570, enhance the existing logging:
       console.log('🤖 Mistral Chatbot request details:', {
         messageLength: message.length,
         hasStrategyContext: !!strategyContext,
+        strategyName: strategyContext?.name,
+        strategyRulesCount: strategyContext?.rules?.length || 0,
         conversationLength: conversationHistory.length,
         timestamp: new Date().toISOString()
       });
       
+      // Add logging for the system prompt
+      if (strategyContext) {
+        console.log('📋 Strategy context details:', {
+          name: strategyContext.name,
+          complexity: strategyContext.complexity,
+          riskProfile: strategyContext.riskProfile,
+          rulesCount: strategyContext.rules?.length || 0,
+          rulesPreview: strategyContext.rules?.[0]?.substring(0, 100) + '...',
+          fullRules: strategyContext.rules // Add this to see the actual rules content
+        });
+      }
+      
+      console.log('💬 System prompt preview:', systemPrompt.substring(0, 200) + '...');
       const response = await fetch(MISTRAL_API_URL, {
         method: 'POST',
         headers: {

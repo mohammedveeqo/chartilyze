@@ -1,7 +1,17 @@
 export interface ChatMessageRequest {
   message: string
-  context: string
-  strategy?: string // Add optional strategy property
+  strategyContext?: {
+    name: string
+    description?: string // ← Add description field
+    rules?: string[]
+    components?: any
+    complexity?: string
+    riskProfile?: string
+  }
+  conversationHistory?: Array<{
+    role: 'user' | 'assistant'
+    content: string
+  }>
 }
 
 export interface AuthCheckRequest {
@@ -24,11 +34,18 @@ export interface Strategy {
   id: string
   name: string
   description: string
+  rules?: string[]
+  components?: any
+  complexity?: string
+  riskProfile?: string
 }
 
 export interface ChatResponse {
   message: string
   success: boolean
+  suggestedActions?: string[]
+  relatedRules?: string[]
+  rawResponse?: any // Keep for debugging
 }
 
 export interface AuthResponse {

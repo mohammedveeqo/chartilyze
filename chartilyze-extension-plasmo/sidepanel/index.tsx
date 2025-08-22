@@ -4,6 +4,20 @@ import { Storage } from "@plasmohq/storage"
 import type { Strategy } from "~lib/types"
 import "../style.css"
 
+// Simple markdown-like formatting function
+const formatMessage = (text: string) => {
+  // Split by double asterisks for bold
+  const parts = text.split(/\*\*(.*?)\*\*/g)
+  
+  return parts.map((part, index) => {
+    // Every odd index is bold text
+    if (index % 2 === 1) {
+      return <strong key={index} className="font-semibold">{part}</strong>
+    }
+    return part
+  })
+}
+
 function SidePanel() {
   const [message, setMessage] = useState("")
   const [messages, setMessages] = useState([])
@@ -11,6 +25,7 @@ function SidePanel() {
   const [currentStrategy, setCurrentStrategy] = useState<Strategy | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isChatLoading, setIsChatLoading] = useState(false)
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false)
   const [strategySearch, setStrategySearch] = useState("")
   const storage = new Storage()
@@ -36,6 +51,14 @@ function SidePanel() {
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  // Auto-select first strategy when strategies are loaded
+  useEffect(() => {
+    if (strategies.length > 0 && !currentStrategy) {
+      const firstStrategy = strategies[0]
+      selectStrategy(firstStrategy)
+    }
+  }, [strategies, currentStrategy])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -75,7 +98,6 @@ function SidePanel() {
     try {
       const stored = await storage.get('currentStrategy')
       if (stored) {
-        // Parse stored strategy if it's a string, or use directly if it's already a Strategy object
         const strategy = typeof stored === 'string' ? JSON.parse(stored) : stored
         setCurrentStrategy(strategy)
       }
@@ -89,14 +111,14 @@ function SidePanel() {
     setShowStrategyDropdown(false)
     await storage.set('currentStrategy', strategy)
     
-    // Add system message about strategy change
-    const systemMessage = {
+    // Add welcome message with strategy-specific knowledge
+    const welcomeMessage = {
       id: Date.now().toString(),
-      content: `✅ Strategy changed to: ${strategy.name}`,
-      type: 'system',
+      content: `Hello! I'm here to help you with your **${strategy.name}** strategy. ${strategy.description ? `\n\n${strategy.description}` : ''} \n\nWhat would you like to know about this strategy?`,
+      type: 'bot',
       timestamp: new Date()
     }
-    setMessages(prev => [...prev, systemMessage])
+    setMessages(prev => [...prev, welcomeMessage])
   }
 
   const filteredStrategies = strategies.filter(strategy =>
@@ -106,7 +128,7 @@ function SidePanel() {
 
   const handleSendMessage = async () => {
     if (!message.trim()) return
-
+  
     const userMessage = {
       id: Date.now().toString(),
       content: message,
@@ -116,15 +138,33 @@ function SidePanel() {
     
     setMessages(prev => [...prev, userMessage])
     setMessage("")
-    setIsLoading(true)
-
+    setIsChatLoading(true)
+  
     try {
+      // Build conversation history
+      const conversationHistory = messages.slice(-6).map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }))
+  
+      // Prepare strategy context
+  const strategyContext = currentStrategy ? {
+    name: currentStrategy.name,
+    description: currentStrategy.description, // ← This is the key field with actual strategy content!
+    rules: currentStrategy.rules || [],
+    components: currentStrategy.components,
+    complexity: currentStrategy.complexity,
+    riskProfile: currentStrategy.riskProfile
+  } : undefined
+  
+  console.log('🎯 Strategy context being sent:', strategyContext)
+  
       const result = await sendToBackground({
         name: "sendChatMessage",
         body: { 
           message, 
-          context: "",
-          strategy: currentStrategy 
+          strategyContext,
+          conversationHistory
         }
       })
       
@@ -148,7 +188,7 @@ function SidePanel() {
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {
-      setIsLoading(false)
+      setIsChatLoading(false)
     }
   }
 
@@ -164,10 +204,10 @@ function SidePanel() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen p-4 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+      <div className="flex items-center justify-center h-screen p-4 bg-gray-50 text-gray-800">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-300 text-lg">Loading Chartilyze...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent mx-auto mb-3"></div>
+          <p className="text-gray-600 text-sm">Loading Chartilyze...</p>
         </div>
       </div>
     )
@@ -175,65 +215,65 @@ function SidePanel() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
-        <div className="text-center mb-8 max-w-md">
-          <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+      <div className="flex flex-col items-center justify-center h-screen p-6 bg-gray-50 text-gray-800">
+        <div className="text-center mb-6 max-w-md">
+          <div className="w-16 h-16 bg-blue-500 rounded-lg flex items-center justify-center mx-auto mb-4">
             <span className="text-2xl">📈</span>
           </div>
-          <h1 className="text-2xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+          <h1 className="text-xl font-semibold mb-2 text-gray-900">
             Chartilyze Assistant
           </h1>
-          <p className="text-gray-400 leading-relaxed">
-            Your AI-powered trading strategy companion. Please authenticate to access advanced features.
+          <p className="text-gray-600 text-sm">
+            Your AI-powered trading strategy companion. Please authenticate to access features.
           </p>
         </div>
         <button
-          className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-blue-500/50 transition-all duration-200 shadow-lg font-medium"
+          className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors font-medium"
           onClick={handleAuth}>
-          🔐 Sign In to Continue
+          Sign In to Continue
         </button>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white">
+    <div className="flex flex-col h-screen bg-white text-gray-900">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700/50 bg-gray-800/80 backdrop-blur-sm">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-            <span className="text-lg">📈</span>
+          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+            <span className="text-sm">📈</span>
           </div>
           <div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            <h1 className="text-base font-semibold text-gray-900">
               Strategy Assistant
             </h1>
-            <p className="text-xs text-gray-400">Chartilyze Extension</p>
+            <p className="text-xs text-gray-500">Chartilyze Extension</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-gray-400">Connected</span>
+          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+          <span className="text-xs text-gray-500">Connected</span>
         </div>
       </div>
 
       {/* Strategy Selector */}
-      <div className="p-4 border-b border-gray-700/50 bg-gray-800/50" ref={dropdownRef}>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Active Strategy</span>
-          <span className="text-xs text-blue-400">{strategies.length} available</span>
+      <div className="p-4 border-b border-gray-200 bg-gray-50" ref={dropdownRef}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-500 font-medium">Active Strategy</span>
+          <span className="text-xs text-blue-500">{strategies.length} available</span>
         </div>
         <div className="relative">
           <button
-            className="w-full flex items-center justify-between p-4 bg-gray-700/80 border border-gray-600/50 rounded-xl hover:bg-gray-600/80 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-200 shadow-sm"
+            className="w-full flex items-center justify-between p-3 bg-white border border-gray-300 rounded-lg hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
             onClick={() => setShowStrategyDropdown(!showStrategyDropdown)}
           >
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                currentStrategy ? 'bg-green-500' : 'bg-gray-500'
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                currentStrategy ? 'bg-green-500' : 'bg-gray-400'
               }`}></div>
               <span className="text-sm font-medium truncate">
-                {currentStrategy ? currentStrategy.name : "Select a strategy"}
+                {currentStrategy ? currentStrategy.name : "Loading strategy..."}
               </span>
             </div>
             <span className={`text-sm transition-transform duration-200 ${
@@ -242,13 +282,13 @@ function SidePanel() {
           </button>
           
           {showStrategyDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-gray-700/95 border border-gray-600/50 rounded-xl shadow-2xl z-50 max-h-80 overflow-hidden backdrop-blur-sm">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-h-80 overflow-hidden">
               {/* Search */}
-              <div className="p-4 border-b border-gray-600/50">
+              <div className="p-3 border-b border-gray-200">
                 <input
                   type="text"
-                  placeholder="🔍 Search strategies..."
-                  className="w-full p-3 bg-gray-600/80 border border-gray-500/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-200"
+                  placeholder="Search strategies..."
+                  className="w-full p-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={strategySearch}
                   onChange={(e) => setStrategySearch(e.target.value)}
                 />
@@ -260,21 +300,21 @@ function SidePanel() {
                   filteredStrategies.map((strategy) => (
                     <button
                       key={strategy.id}
-                      className={`w-full text-left p-4 hover:bg-gray-600/80 border-b border-gray-600/30 last:border-b-0 transition-all duration-200 ${
+                      className={`w-full text-left p-3 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors ${
                         currentStrategy?.id === strategy.id 
-                          ? 'bg-gradient-to-r from-blue-600/80 to-purple-600/80 text-white' 
+                          ? 'bg-blue-50 text-blue-700' 
                           : ''
                       }`}
                       onClick={() => selectStrategy(strategy)}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <div className={`w-2 h-2 rounded-full ${
-                          currentStrategy?.id === strategy.id ? 'bg-white' : 'bg-blue-400'
+                          currentStrategy?.id === strategy.id ? 'bg-blue-500' : 'bg-gray-400'
                         }`}></div>
                         <div className="flex-1">
                           <div className="font-medium text-sm">{strategy.name}</div>
                           {strategy.description && (
-                            <div className="text-xs text-gray-400 mt-1 line-clamp-2">
+                            <div className="text-xs text-gray-500 mt-1 line-clamp-2">
                               {strategy.description}
                             </div>
                           )}
@@ -283,8 +323,7 @@ function SidePanel() {
                     </button>
                   ))
                 ) : (
-                  <div className="p-6 text-sm text-gray-400 text-center">
-                    <div className="text-2xl mb-2">🔍</div>
+                  <div className="p-4 text-sm text-gray-500 text-center">
                     {strategies.length === 0 
                       ? 'No strategies available. Make sure the server is running.' 
                       : 'No strategies match your search'
@@ -298,13 +337,15 @@ function SidePanel() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 ? (
-          <div className="text-center text-gray-400 mt-12">
-            <div className="text-6xl mb-6">💬</div>
-            <h3 className="text-lg font-medium mb-2">Ready to analyze</h3>
-            <p className="text-sm leading-relaxed max-w-sm mx-auto">
-              Start a conversation about your trading strategies. I'm here to help with analysis, insights, and recommendations.
+          <div className="text-center text-gray-500 mt-8">
+            <div className="text-4xl mb-4">💬</div>
+            <h3 className="text-base font-medium mb-2">Ready to analyze</h3>
+            <p className="text-sm text-gray-400 max-w-sm mx-auto">
+              {currentStrategy 
+                ? `Ask me anything about your ${currentStrategy.name} strategy.`
+                : 'Loading your strategy...'}
             </p>
           </div>
         ) : (
@@ -313,53 +354,75 @@ function SidePanel() {
               <div key={msg.id} className={`flex ${
                 msg.type === 'user' ? 'justify-end' : 'justify-start'
               }`}>
-                <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl shadow-sm ${
+                <div className={`max-w-xs lg:max-w-md px-3 py-2 rounded-lg ${
                   msg.type === 'user' 
-                    ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white' 
+                    ? 'bg-blue-500 text-white' 
                     : msg.type === 'system'
-                    ? 'bg-gradient-to-r from-yellow-600 to-orange-600 text-white'
+                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
                     : msg.isError
-                    ? 'bg-gradient-to-r from-red-600 to-pink-600 text-white'
-                    : 'bg-gray-700/80 text-gray-100 border border-gray-600/50'
+                    ? 'bg-red-100 text-red-800 border border-red-200'
+                    : 'bg-gray-100 text-gray-800 border border-gray-200'
                 }`}>
-                  <p className="text-sm leading-relaxed">{msg.content}</p>
-                  <p className="text-xs opacity-70 mt-2">
+                  <div className="text-sm">
+                    {msg.type === 'bot' && !msg.isError ? (
+                      <div className="whitespace-pre-wrap">
+                        {formatMessage(msg.content)}
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    )}
+                  </div>
+                  <p className="text-xs opacity-70 mt-1">
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
               </div>
             ))}
+            
+            {/* Chat Loading Indicator */}
+            {isChatLoading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 border border-gray-200 px-3 py-2 rounded-lg">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div ref={messagesEndRef} />
           </>
         )}
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-gray-700/50 bg-gray-800/50">
-        <div className="flex gap-3">
+      <div className="p-4 border-t border-gray-200 bg-white">
+        <div className="flex gap-2">
           <input
             type="text"
-            className="flex-1 p-4 bg-gray-700/80 border border-gray-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-white placeholder-gray-400 transition-all duration-200"
+            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 placeholder-gray-500"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Ask about trading strategies..."
+            placeholder={currentStrategy ? `Ask about ${currentStrategy.name}...` : "Ask about trading strategies..."}
             onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
           />
           <button
-            className="px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg font-medium"
+            className="px-4 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             onClick={handleSendMessage}
-            disabled={isLoading || !message.trim()}
+            disabled={isChatLoading || !message.trim()}
           >
-            {isLoading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            {isChatLoading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
             ) : (
-              '📤'
+              '→'
             )}
           </button>
         </div>
         {currentStrategy && (
-          <div className="mt-2 text-xs text-gray-400">
-            Using strategy: <span className="text-blue-400 font-medium">{currentStrategy.name}</span>
+          <div className="mt-2 text-xs text-gray-500">
+            Using strategy: <span className="text-blue-600 font-medium">{currentStrategy.name}</span>
           </div>
         )}
       </div>
