@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { Navbar } from '@/components/homepage/navbar';
-import { Hero } from '@/components/homepage/hero';
+import Hero from '@/components/homepage/hero';
 import  Features  from '@/components/homepage/features';
 import { HowItWorks } from '@/components/homepage/howItWorks';
 import { Pricing } from '@/components/homepage/pricing';
@@ -24,7 +24,7 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900 text-white overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white overflow-x-hidden">
       <Navbar scrollY={scrollY} />
       <main>
         <Hero />
