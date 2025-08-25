@@ -2,6 +2,7 @@ import { sendToBackground } from "@plasmohq/messaging"
 import { useState, useEffect, useRef } from "react"
 import { Storage } from "@plasmohq/storage"
 import type { Strategy } from "~lib/types"
+import { JournalEntry } from "~components/JournalEntry"
 import "../style.css"
 
 // Simple markdown-like formatting function
@@ -28,6 +29,8 @@ function SidePanel() {
   const [isChatLoading, setIsChatLoading] = useState(false)
   const [showStrategyDropdown, setShowStrategyDropdown] = useState(false)
   const [strategySearch, setStrategySearch] = useState("")
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false)
+  const [showJournalEntry, setShowJournalEntry] = useState(false)
   const storage = new Storage()
   const dropdownRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -202,6 +205,66 @@ function SidePanel() {
     }
   }
 
+  const handleCaptureScreenshot = async () => {
+    setIsCapturingScreenshot(true)
+    try {
+      const result = await sendToBackground({
+        name: "captureScreenshot"
+      })
+      
+      if (result.success && result.screenshot) {
+        // Add screenshot message to chat
+        const screenshotMessage = {
+          id: Date.now().toString(),
+          content: `📸 Screenshot captured successfully!`,
+          type: 'system',
+          timestamp: new Date(),
+          screenshot: result.screenshot // Add the screenshot data
+        }
+        setMessages(prev => [...prev, screenshotMessage])
+        
+        // Add follow-up message with journal option
+        const journalPromptMessage = {
+          id: (Date.now() + 1).toString(),
+          content: "Would you like to journal this trade? Click the button below to add trade details.",
+          type: 'bot',
+          timestamp: new Date(),
+          showJournalButton: true // Flag to show journal button
+        }
+        setMessages(prev => [...prev, journalPromptMessage])
+      } else {
+        throw new Error(result.error || 'Failed to capture screenshot')
+      }
+    } catch (error) {
+      console.error("Screenshot capture failed:", error)
+      const errorMessage = {
+        id: Date.now().toString(),
+        content: "❌ Failed to capture screenshot. Please try again.",
+        type: 'bot',
+        timestamp: new Date(),
+        isError: true
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
+      setIsCapturingScreenshot(false)
+    }
+  }
+
+  const handleOpenJournalEntry = () => {
+    setShowJournalEntry(true)
+  }
+
+  const handleJournalSuccess = (message: string) => {
+    setShowJournalEntry(false)
+    const successMessage = {
+      id: Date.now().toString(),
+      content: message || "📝 Journal entry created successfully!",
+      type: 'system',
+      timestamp: new Date()
+    }
+    setMessages(prev => [...prev, successMessage])
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-screen p-4 bg-gray-50 text-gray-800">
@@ -363,6 +426,18 @@ function SidePanel() {
                     ? 'bg-red-100 text-red-800 border border-red-200'
                     : 'bg-gray-100 text-gray-800 border border-gray-200'
                 }`}>
+                  {/* Screenshot display */}
+                  {msg.screenshot && (
+                    <div className="mb-2">
+                      <img 
+                        src={msg.screenshot} 
+                        alt="Screenshot" 
+                        className="w-full rounded-md border border-gray-300"
+                        style={{ maxHeight: '200px', objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+                  
                   <div className="text-sm">
                     {msg.type === 'bot' && !msg.isError ? (
                       <div className="whitespace-pre-wrap">
@@ -372,6 +447,19 @@ function SidePanel() {
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}
                   </div>
+                  
+                  {/* Journal button for messages that have showJournalButton flag */}
+                  {msg.showJournalButton && (
+                    <div className="mt-2">
+                      <button
+                        className="px-3 py-1 bg-blue-500 text-white text-xs rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors"
+                        onClick={handleOpenJournalEntry}
+                      >
+                        📝 Journal Trade
+                      </button>
+                    </div>
+                  )}
+                  
                   <p className="text-xs opacity-70 mt-1">
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -395,6 +483,33 @@ function SidePanel() {
             <div ref={messagesEndRef} />
           </>
         )}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="px-4 py-2 border-t border-gray-200 bg-gray-50">
+        <div className="flex gap-2">
+          <button
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium text-gray-700"
+            onClick={handleCaptureScreenshot}
+            disabled={isCapturingScreenshot || isChatLoading}
+          >
+            {isCapturingScreenshot ? (
+              <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <span>📸</span>
+            )}
+            <span>{isCapturingScreenshot ? 'Capturing...' : 'Screenshot'}</span>
+          </button>
+          
+          <button
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium text-gray-700"
+            onClick={handleOpenJournalEntry}
+            disabled={isChatLoading}
+          >
+            <span>📝</span>
+            <span>Journal Entry</span>
+          </button>
+        </div>
       </div>
 
       {/* Input */}
@@ -426,6 +541,19 @@ function SidePanel() {
           </div>
         )}
       </div>
+
+      {/* Journal Entry Modal */}
+      {showJournalEntry && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-hidden">
+            <JournalEntry 
+              onSuccess={handleJournalSuccess}
+              onCancel={() => setShowJournalEntry(false)}
+              onClose={() => setShowJournalEntry(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

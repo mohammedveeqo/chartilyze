@@ -16,7 +16,7 @@ export const Navbar = ({ scrollY }: NavbarProps) => {
     <nav
       className={`fixed top-0 z-50 w-full transition-all duration-500 ${
         scrollY > 0
-          ? 'bg-slate-950/90 backdrop-blur-xl shadow-lg shadow-slate-900/30'
+          ? 'bg-slate-950/20 backdrop-blur-md shadow-lg shadow-slate-900/20'
           : 'bg-transparent'
       }`}
     >
@@ -64,7 +64,7 @@ export const Navbar = ({ scrollY }: NavbarProps) => {
 
       {/* Mobile Menu Dropdown */}
       {isMenuOpen && (
-        <div className="md:hidden bg-slate-950/95 backdrop-blur-xl px-6 py-4 space-y-4">
+        <div className="md:hidden bg-slate-950/30 backdrop-blur-md px-6 py-4 space-y-4">
           {navItems.map((item) => (
             <a
               key={item.href}

@@ -20,6 +20,22 @@ interface JournalRequestBody {
   settings?: any;
   userId: string;
   chartData?: any;
+  // Enhanced trade details
+  tradeDetails?: {
+    pair: string;
+    timeframe: string;
+    strategyId?: string;
+    strategyComponent?: string;
+    entryType: 'setup' | 'review';
+    direction?: 'long' | 'short';
+    entryPrice?: number;
+    stopLoss?: number;
+    takeProfit?: number;
+    notes?: string;
+  };
+  screenshot?: string;
+  source?: string;
+  timestamp?: number;
 }
 
 interface AnalyzeRequestBody {
@@ -439,7 +455,7 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     try {
       const body = await request.json() as JournalRequestBody;
-      const { name, description, strategy, settings, userId, chartData } = body;
+      const { name, description, strategy, settings, userId, chartData, tradeDetails, screenshot, source, timestamp } = body;
 
       if (!name || !userId) {
         return new Response(
@@ -461,20 +477,48 @@ http.route({
         },
         ...(chartData && {
           metadata: {
-            source: "tradingview-extension",
+            source: source || "tradingview-extension",
             chartData,
-            createdAt: Date.now(),
+            createdAt: timestamp || Date.now(),
           }
         })
       };
 
       const journalId = await ctx.runMutation(api.journals.create, journalData);
 
+      // Create trade entry if trade details are provided and it's a setup entry
+      let tradeId = null;
+      if (tradeDetails && tradeDetails.entryType === 'setup' && 
+          tradeDetails.entryPrice && tradeDetails.stopLoss && tradeDetails.takeProfit) {
+        
+        const tradeData = {
+          journalId,
+          symbol: tradeDetails.pair,
+          entry: tradeDetails.entryPrice,
+          stopLoss: tradeDetails.stopLoss,
+          takeProfit: tradeDetails.takeProfit,
+          notes: tradeDetails.notes,
+          screenshots: screenshot ? [screenshot] : [],
+          metadata: {
+            timeframe: tradeDetails.timeframe,
+            setup: tradeDetails.strategyComponent || 'Manual Entry',
+            tags: [
+              tradeDetails.direction || 'unknown',
+              tradeDetails.entryType,
+              ...(source ? [source] : [])
+            ]
+          }
+        };
+
+        tradeId = await ctx.runMutation(api.trades.create, tradeData);
+      }
+
       return new Response(
         JSON.stringify({ 
           success: true, 
           journalId,
-          message: "Journal entry created successfully"
+          tradeId,
+          message: tradeId ? "Journal entry and trade created successfully" : "Journal entry created successfully"
         }),
         {
           status: 201,

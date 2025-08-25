@@ -5,7 +5,15 @@ const handler: PlasmoMessaging.MessageHandler<ScreenshotRequest, ScreenshotRespo
   console.log('Capturing screenshot')
   
   try {
-    const screenshot = await chrome.tabs.captureVisibleTab(undefined, {
+    // Get the current active tab
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    
+    if (!activeTab || !activeTab.id) {
+      throw new Error('No active tab found')
+    }
+    
+    // Use host_permissions instead of activeTab for sidepanel
+    const screenshot = await chrome.tabs.captureVisibleTab(activeTab.windowId, {
       format: 'png',
       quality: 90
     })
@@ -18,7 +26,8 @@ const handler: PlasmoMessaging.MessageHandler<ScreenshotRequest, ScreenshotRespo
     console.error('Screenshot error:', error)
     res.send({
       screenshot: '',
-      success: false
+      success: false,
+      error: error.message
     })
   }
 }

@@ -59,6 +59,7 @@ export interface AuthResponse {
 export interface ScreenshotResponse {
   screenshot: string
   success: boolean
+  error?: string // Add optional error property
 }
 
 export interface StrategiesResponse {
@@ -83,4 +84,28 @@ export interface PageData {
   timestamp: string
   selectedText: string
   pageContent: string
+}
+
+export interface CreateJournalEntryRequest {
+  screenshot: string
+  tradeDetails: {
+    pair: string
+    timeframe: string
+    strategyId: string
+    strategyComponent: string
+    notes: string
+    entryType: 'setup' | 'outcome'
+    direction?: 'long' | 'short'
+    entryPrice?: string
+    stopLoss?: string
+    takeProfit?: string
+  }
+  timestamp: string
+}
+
+export interface CreateJournalEntryResponse {
+  success: boolean
+  journalId?: string
+  tradeId?: string
+  error?: string
 }
